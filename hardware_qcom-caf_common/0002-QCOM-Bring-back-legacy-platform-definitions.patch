@@ -1,0 +1,62 @@
+From 45b9bcaaec84d3705e3e0386ae35b0b75a5a3b4e Mon Sep 17 00:00:00 2001
+From: TARKZiM <tom8476oo@gmail.com>
+Date: Fri, 24 Oct 2025 00:07:47 +0300
+Subject: [PATCH 2/2] QCOM: Bring back legacy platform definitions
+
+Change-Id: I5d8396f86fea34d14b83a0514f8e46efc6c260ff
+---
+ qcom_boards.mk | 21 +++++++++++++++++++++
+ qcom_defs.mk   |  5 +++++
+ 2 files changed, 26 insertions(+)
+
+diff --git a/qcom_boards.mk b/qcom_boards.mk
+index 62ae73d..66881a8 100644
+--- a/qcom_boards.mk
++++ b/qcom_boards.mk
+@@ -1,6 +1,27 @@
+ # Board platforms lists to be used for
+ # TARGET_BOARD_PLATFORM specific featurization
+ 
++# A Family
++QCOM_BOARD_PLATFORMS += msm7x27a
++QCOM_BOARD_PLATFORMS += msm7x30
++QCOM_BOARD_PLATFORMS += msm8660
++QCOM_BOARD_PLATFORMS += msm8960
++
++# B Family
++QCOM_BOARD_PLATFORMS += msm8226
++QCOM_BOARD_PLATFORMS += msm8610
++QCOM_BOARD_PLATFORMS += msm8974
++QCOM_BOARD_PLATFORMS += apq8084
++
++# B64 Family
++QCOM_BOARD_PLATFORMS += msm8992
++QCOM_BOARD_PLATFORMS += msm8994
++
++# BR Family
++QCOM_BOARD_PLATFORMS += msm8909
++QCOM_BOARD_PLATFORMS += msm8916
++QCOM_BOARD_PLATFORMS += msm8952
++
+ # UM 3.18
+ QCOM_BOARD_PLATFORMS += msm8937
+ QCOM_BOARD_PLATFORMS += msm8953
+diff --git a/qcom_defs.mk b/qcom_defs.mk
+index 3ea9e92..e5dc469 100644
+--- a/qcom_defs.mk
++++ b/qcom_defs.mk
+@@ -2,6 +2,11 @@
+ MSMSTEPPE := sm6150
+ TRINKET := trinket #SM6125
+ 
++# UL families
++B_FAMILY := msm8226 msm8610 msm8974
++B64_FAMILY := msm8992 msm8994
++BR_FAMILY := msm8909 msm8916
++
+ # UM families
+ UM_3_18_FAMILY := msm8996 msm8937 msm8953
+ UM_4_4_FAMILY := msm8998 sdm660
+-- 
+2.51.0
+

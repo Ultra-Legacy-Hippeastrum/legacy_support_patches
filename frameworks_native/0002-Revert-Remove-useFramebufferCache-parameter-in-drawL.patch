@@ -1,0 +1,1161 @@
+From 2776a94809cf7102c4a4cb410ed2db69ded97030 Mon Sep 17 00:00:00 2001
+From: Yaroslav Zviezda <acroreiser@gmail.com>
+Date: Mon, 20 Oct 2025 22:00:37 +0300
+Subject: [PATCH 2/7] Revert "Remove useFramebufferCache parameter in
+ drawLayers()" and fix new code
+
+This reverts commit f29700fb05dd225dc5b80dac5e4d80e074622e09.
+
+Change-Id: I74d2a7a70a609bfacbe6a0f3b1e995a96f0051c1
+---
+ libs/renderengine/RenderEngine.cpp            |  4 +-
+ .../benchmark/RenderEngineBench.cpp           | 15 +++-
+ .../include/renderengine/RenderEngine.h       |  7 +-
+ .../include/renderengine/mock/RenderEngine.h  |  8 +--
+ libs/renderengine/skia/Cache.cpp              | 39 ++++++-----
+ libs/renderengine/skia/SkiaRenderEngine.cpp   |  3 +-
+ libs/renderengine/skia/SkiaRenderEngine.h     |  1 +
+ libs/renderengine/tests/RenderEngineTest.cpp  |  9 +--
+ .../tests/RenderEngineThreadedTest.cpp        | 12 ++--
+ .../threaded/RenderEngineThreaded.cpp         | 10 +--
+ .../threaded/RenderEngineThreaded.h           |  3 +-
+ .../CompositionEngine/src/Output.cpp          | 10 ++-
+ .../src/planner/CachedSet.cpp                 |  4 +-
+ .../CompositionEngine/tests/OutputTest.cpp    | 34 +++++-----
+ .../tests/planner/CachedSetTest.cpp           | 32 ++++-----
+ .../tests/planner/FlattenerTest.cpp           | 68 +++++++++----------
+ .../tests/unittests/CompositionTest.cpp       | 16 ++---
+ 17 files changed, 157 insertions(+), 118 deletions(-)
+
+diff --git a/libs/renderengine/RenderEngine.cpp b/libs/renderengine/RenderEngine.cpp
+index 873fc67..b61e14c 100644
+--- a/libs/renderengine/RenderEngine.cpp
++++ b/libs/renderengine/RenderEngine.cpp
+@@ -99,11 +99,13 @@ void RenderEngine::validateOutputBufferUsage(const sp<GraphicBuffer>& buffer) {
+ ftl::Future<FenceResult> RenderEngine::drawLayers(const DisplaySettings& display,
+                                                   const std::vector<LayerSettings>& layers,
+                                                   const std::shared_ptr<ExternalTexture>& buffer,
++                                                  const bool useFramebufferCache,
+                                                   base::unique_fd&& bufferFence) {
+     const auto resultPromise = std::make_shared<std::promise<FenceResult>>();
+     std::future<FenceResult> resultFuture = resultPromise->get_future();
+     updateProtectedContext(layers, {buffer.get()});
+-    drawLayersInternal(std::move(resultPromise), display, layers, buffer, std::move(bufferFence));
++    drawLayersInternal(std::move(resultPromise), display, layers, buffer, useFramebufferCache,
++                       std::move(bufferFence));
+     return resultFuture;
+ }
+ 
+diff --git a/libs/renderengine/benchmark/RenderEngineBench.cpp b/libs/renderengine/benchmark/RenderEngineBench.cpp
+index 595573d..9c4b18d 100644
+--- a/libs/renderengine/benchmark/RenderEngineBench.cpp
++++ b/libs/renderengine/benchmark/RenderEngineBench.cpp
+@@ -75,6 +75,10 @@ std::pair<uint32_t, uint32_t> getDisplaySize() {
+     return std::pair<uint32_t, uint32_t>(width, height);
+ }
+ 
++// This value doesn't matter, as it's not read. TODO(b/199918329): Once we remove
++// GLESRenderEngine we can remove this, too.
++static constexpr const bool kUseFrameBufferCache = false;
++
+ static std::unique_ptr<RenderEngine> createRenderEngine(
+         RenderEngine::Threaded threaded, RenderEngine::GraphicsApi graphicsApi,
+         RenderEngine::BlurAlgorithm blurAlgorithm = RenderEngine::BlurAlgorithm::KAWASE) {
+@@ -138,7 +142,10 @@ static std::shared_ptr<ExternalTexture> copyBuffer(RenderEngine& re,
+     };
+     auto layers = std::vector<LayerSettings>{layer};
+ 
+-    sp<Fence> waitFence = re.drawLayers(display, layers, texture, base::unique_fd()).get().value();
++    sp<Fence> waitFence =
++            re.drawLayers(display, layers, texture, kUseFrameBufferCache, base::unique_fd())
++                    .get()
++                    .value();
+     waitFence->waitForever(LOG_TAG);
+     return texture;
+ }
+@@ -167,8 +174,10 @@ static void benchDrawLayers(RenderEngine& re, const std::vector<LayerSettings>&
+ 
+     // This loop starts and stops the timer.
+     for (auto _ : benchState) {
+-        sp<Fence> waitFence =
+-                re.drawLayers(display, layers, outputBuffer, base::unique_fd()).get().value();
++        sp<Fence> waitFence = re.drawLayers(display, layers, outputBuffer, kUseFrameBufferCache,
++                                            base::unique_fd())
++                                      .get()
++                                      .value();
+         waitFence->waitForever(LOG_TAG);
+     }
+ 
+diff --git a/libs/renderengine/include/renderengine/RenderEngine.h b/libs/renderengine/include/renderengine/RenderEngine.h
+index a59e702..3f6f2dd 100644
+--- a/libs/renderengine/include/renderengine/RenderEngine.h
++++ b/libs/renderengine/include/renderengine/RenderEngine.h
+@@ -211,6 +211,9 @@ public:
+     // @param layers The layers to draw onto the display, in Z-order.
+     // @param buffer The buffer which will be drawn to. This buffer will be
+     // ready once drawFence fires.
++    // @param useFramebufferCache True if the framebuffer cache should be used.
++    // If an implementation does not cache output framebuffers, then this
++    // parameter does nothing.
+     // @param bufferFence Fence signalling that the buffer is ready to be drawn
+     // to.
+     // @return A future object of FenceResult indicating whether drawing was
+@@ -218,6 +221,7 @@ public:
+     virtual ftl::Future<FenceResult> drawLayers(const DisplaySettings& display,
+                                                 const std::vector<LayerSettings>& layers,
+                                                 const std::shared_ptr<ExternalTexture>& buffer,
++                                                const bool useFramebufferCache,
+                                                 base::unique_fd&& bufferFence);
+ 
+     // Tonemaps an HDR input image and draws an SDR rendition, plus a gainmap
+@@ -316,7 +320,8 @@ protected:
+     virtual void drawLayersInternal(
+             const std::shared_ptr<std::promise<FenceResult>>&& resultPromise,
+             const DisplaySettings& display, const std::vector<LayerSettings>& layers,
+-            const std::shared_ptr<ExternalTexture>& buffer, base::unique_fd&& bufferFence) = 0;
++            const std::shared_ptr<ExternalTexture>& buffer, const bool useFramebufferCache,
++            base::unique_fd&& bufferFence) = 0;
+ 
+     virtual void tonemapAndDrawGainmapInternal(
+             const std::shared_ptr<std::promise<FenceResult>>&& resultPromise,
+diff --git a/libs/renderengine/include/renderengine/mock/RenderEngine.h b/libs/renderengine/include/renderengine/mock/RenderEngine.h
+index 0f98822..a71b759 100644
+--- a/libs/renderengine/include/renderengine/mock/RenderEngine.h
++++ b/libs/renderengine/include/renderengine/mock/RenderEngine.h
+@@ -45,9 +45,9 @@ public:
+     MOCK_METHOD1(useProtectedContext, void(bool));
+     MOCK_METHOD0(cleanupPostRender, void());
+     MOCK_CONST_METHOD0(canSkipPostRenderCleanup, bool());
+-    MOCK_METHOD4(drawLayers,
++    MOCK_METHOD5(drawLayers,
+                  ftl::Future<FenceResult>(const DisplaySettings&, const std::vector<LayerSettings>&,
+-                                          const std::shared_ptr<ExternalTexture>&,
++                                          const std::shared_ptr<ExternalTexture>&, const bool,
+                                           base::unique_fd&&));
+     MOCK_METHOD6(tonemapAndDrawGainmap,
+                  ftl::Future<FenceResult>(const std::shared_ptr<ExternalTexture>&,
+@@ -59,10 +59,10 @@ public:
+                       const std::shared_ptr<ExternalTexture>&, base::borrowed_fd&&, float,
+                       ui::Dataspace, const std::shared_ptr<ExternalTexture>&,
+                       const std::shared_ptr<ExternalTexture>&));
+-    MOCK_METHOD5(drawLayersInternal,
++    MOCK_METHOD6(drawLayersInternal,
+                  void(const std::shared_ptr<std::promise<FenceResult>>&&, const DisplaySettings&,
+                       const std::vector<LayerSettings>&, const std::shared_ptr<ExternalTexture>&,
+-                      base::unique_fd&&));
++                      const bool, base::unique_fd&&));
+     MOCK_METHOD0(cleanFramebufferCache, void());
+     MOCK_METHOD0(getContextPriority, int());
+     MOCK_METHOD0(supportsBackgroundBlur, bool());
+diff --git a/libs/renderengine/skia/Cache.cpp b/libs/renderengine/skia/Cache.cpp
+index f43694e..7221950 100644
+--- a/libs/renderengine/skia/Cache.cpp
++++ b/libs/renderengine/skia/Cache.cpp
+@@ -36,6 +36,8 @@
+ namespace android::renderengine::skia {
+ 
+ namespace {
++// Warming shader cache, not framebuffer cache.
++constexpr bool kUseFrameBufferCache = false;
+ 
+ // clang-format off
+ // Any non-identity matrix will do.
+@@ -130,7 +132,8 @@ static void drawShadowLayers(SkiaRenderEngine* renderengine, const DisplaySettin
+         caster.geometry.positionTransform = transform;
+ 
+         auto layers = std::vector<LayerSettings>{layer, caster};
+-        renderengine->drawLayers(display, layers, dstTexture, base::unique_fd());
++        renderengine->drawLayers(display, layers, dstTexture, kUseFrameBufferCache,
++                                 base::unique_fd());
+     }
+ }
+ 
+@@ -167,7 +170,8 @@ static void drawImageLayers(SkiaRenderEngine* renderengine, const DisplaySetting
+                 for (auto alpha : {half(.2f), half(1.0f)}) {
+                     layer.alpha = alpha;
+                     auto layers = std::vector<LayerSettings>{layer};
+-                    renderengine->drawLayers(display, layers, dstTexture, base::unique_fd());
++                    renderengine->drawLayers(display, layers, dstTexture, kUseFrameBufferCache,
++                                             base::unique_fd());
+                 }
+             }
+         }
+@@ -195,7 +199,8 @@ static void drawSolidLayers(SkiaRenderEngine* renderengine, const DisplaySetting
+         for (float roundedCornersRadius : {0.0f, 50.f}) {
+             layer.geometry.roundedCornersRadius = {roundedCornersRadius, roundedCornersRadius};
+             auto layers = std::vector<LayerSettings>{layer};
+-            renderengine->drawLayers(display, layers, dstTexture, base::unique_fd());
++            renderengine->drawLayers(display, layers, dstTexture, kUseFrameBufferCache,
++                                     base::unique_fd());
+         }
+     }
+ }
+@@ -218,7 +223,8 @@ static void drawBlurLayers(SkiaRenderEngine* renderengine, const DisplaySettings
+     for (int radius : {9, 60}) {
+         layer.backgroundBlurRadius = radius;
+         auto layers = std::vector<LayerSettings>{layer};
+-        renderengine->drawLayers(display, layers, dstTexture, base::unique_fd());
++        renderengine->drawLayers(display, layers, dstTexture, kUseFrameBufferCache,
++                                 base::unique_fd());
+     }
+ }
+ 
+@@ -264,7 +270,8 @@ static void drawClippedLayers(SkiaRenderEngine* renderengine, const DisplaySetti
+                 for (float alpha : {0.5f, 1.f}) {
+                     layer.alpha = alpha;
+                     auto layers = std::vector<LayerSettings>{layer};
+-                    renderengine->drawLayers(display, layers, dstTexture, base::unique_fd());
++                    renderengine->drawLayers(display, layers, dstTexture, kUseFrameBufferCache,
++                                             base::unique_fd());
+                 }
+             }
+         }
+@@ -301,7 +308,7 @@ static void drawPIPImageLayer(SkiaRenderEngine* renderengine, const DisplaySetti
+     };
+ 
+     auto layers = std::vector<LayerSettings>{layer};
+-    renderengine->drawLayers(display, layers, dstTexture, base::unique_fd());
++    renderengine->drawLayers(display, layers, dstTexture, kUseFrameBufferCache, base::unique_fd());
+ }
+ 
+ static void drawHolePunchLayer(SkiaRenderEngine* renderengine, const DisplaySettings& display,
+@@ -330,7 +337,7 @@ static void drawHolePunchLayer(SkiaRenderEngine* renderengine, const DisplaySett
+     };
+ 
+     auto layers = std::vector<LayerSettings>{layer};
+-    renderengine->drawLayers(display, layers, dstTexture, base::unique_fd());
++    renderengine->drawLayers(display, layers, dstTexture, kUseFrameBufferCache, base::unique_fd());
+ }
+ 
+ static void drawImageDimmedLayers(SkiaRenderEngine* renderengine, const DisplaySettings& display,
+@@ -362,7 +369,7 @@ static void drawImageDimmedLayers(SkiaRenderEngine* renderengine, const DisplayS
+         layer.whitePointNits = layerWhitePoint;
+         layers.push_back(layer);
+     }
+-    renderengine->drawLayers(display, layers, dstTexture, base::unique_fd());
++    renderengine->drawLayers(display, layers, dstTexture, false, base::unique_fd());
+ }
+ 
+ static void drawTransparentImageDimmedLayers(SkiaRenderEngine* renderengine,
+@@ -405,7 +412,7 @@ static void drawTransparentImageDimmedLayers(SkiaRenderEngine* renderengine,
+                     layer.whitePointNits = layerWhitePoint;
+                     layers.push_back(layer);
+                 }
+-                renderengine->drawLayers(display, layers, dstTexture, base::unique_fd());
++                renderengine->drawLayers(display, layers, dstTexture, false, base::unique_fd());
+             }
+         }
+     }
+@@ -455,7 +462,7 @@ static void drawClippedDimmedImageLayers(SkiaRenderEngine* renderengine,
+             layer.whitePointNits = layerWhitePoint;
+             layers.push_back(layer);
+         }
+-        renderengine->drawLayers(display, layers, dstTexture, base::unique_fd());
++        renderengine->drawLayers(display, layers, dstTexture, false, base::unique_fd());
+     }
+ }
+ 
+@@ -482,7 +489,7 @@ static void drawSolidDimmedLayers(SkiaRenderEngine* renderengine, const DisplayS
+         layer.whitePointNits = layerWhitePoint;
+         layers.push_back(layer);
+     }
+-    renderengine->drawLayers(display, layers, dstTexture, base::unique_fd());
++    renderengine->drawLayers(display, layers, dstTexture, false, base::unique_fd());
+ }
+ 
+ static void drawBT2020ImageLayers(SkiaRenderEngine* renderengine, const DisplaySettings& display,
+@@ -514,7 +521,7 @@ static void drawBT2020ImageLayers(SkiaRenderEngine* renderengine, const DisplayS
+         layer.whitePointNits = -1.f;
+         layers.push_back(layer);
+ 
+-        renderengine->drawLayers(display, layers, dstTexture, base::unique_fd());
++        renderengine->drawLayers(display, layers, dstTexture, false, base::unique_fd());
+     }
+ }
+ static void drawBT2020ClippedImageLayers(SkiaRenderEngine* renderengine,
+@@ -548,7 +555,7 @@ static void drawBT2020ClippedImageLayers(SkiaRenderEngine* renderengine,
+     };
+ 
+     std::vector<LayerSettings> layers = {layer};
+-    renderengine->drawLayers(display, layers, dstTexture, base::unique_fd());
++    renderengine->drawLayers(display, layers, dstTexture, false, base::unique_fd());
+ }
+ 
+ static void drawExtendedHDRImageLayers(SkiaRenderEngine* renderengine,
+@@ -585,7 +592,7 @@ static void drawExtendedHDRImageLayers(SkiaRenderEngine* renderengine,
+                 layer.whitePointNits = layerWhitePoint;
+                 layers.push_back(layer);
+             }
+-            renderengine->drawLayers(display, layers, dstTexture, base::unique_fd());
++            renderengine->drawLayers(display, layers, dstTexture, false, base::unique_fd());
+         }
+     }
+ }
+@@ -621,7 +628,7 @@ static void drawP3ImageLayers(SkiaRenderEngine* renderengine, const DisplaySetti
+             layer.whitePointNits = layerWhitePoint;
+             layers.push_back(layer);
+         }
+-        renderengine->drawLayers(display, layers, dstTexture, base::unique_fd());
++        renderengine->drawLayers(display, layers, dstTexture, false, base::unique_fd());
+     }
+ }
+ 
+@@ -852,7 +859,7 @@ void Cache::primeShaderCache(SkiaRenderEngine* renderengine, PrimeCacheConfig co
+         // call get() to make it synchronous
+         {
+             SFTRACE_NAME("finalLayer");
+-            renderengine->drawLayers(display, layers, dstTexture, base::unique_fd()).get();
++            renderengine->drawLayers(display, layers, dstTexture, kUseFrameBufferCache, base::unique_fd()).get();
+         }
+ 
+         const nsecs_t timeAfter = systemTime();
+diff --git a/libs/renderengine/skia/SkiaRenderEngine.cpp b/libs/renderengine/skia/SkiaRenderEngine.cpp
+index 5b6edb4..c28ffd2 100644
+--- a/libs/renderengine/skia/SkiaRenderEngine.cpp
++++ b/libs/renderengine/skia/SkiaRenderEngine.cpp
+@@ -735,7 +735,8 @@ private:
+ void SkiaRenderEngine::drawLayersInternal(
+         const std::shared_ptr<std::promise<FenceResult>>&& resultPromise,
+         const DisplaySettings& display, const std::vector<LayerSettings>& layers,
+-        const std::shared_ptr<ExternalTexture>& buffer, base::unique_fd&& bufferFence) {
++        const std::shared_ptr<ExternalTexture>& buffer, const bool /*useFramebufferCache*/,
++        base::unique_fd&& bufferFence) {
+     SFTRACE_FORMAT("%s for %s", __func__, display.namePlusId.c_str());
+ 
+     std::lock_guard<std::mutex> lock(mRenderingMutex);
+diff --git a/libs/renderengine/skia/SkiaRenderEngine.h b/libs/renderengine/skia/SkiaRenderEngine.h
+index 759a132..5071aec 100644
+--- a/libs/renderengine/skia/SkiaRenderEngine.h
++++ b/libs/renderengine/skia/SkiaRenderEngine.h
+@@ -144,6 +144,7 @@ private:
+                             const DisplaySettings& display,
+                             const std::vector<LayerSettings>& layers,
+                             const std::shared_ptr<ExternalTexture>& buffer,
++                            const bool useFramebufferCache,
+                             base::unique_fd&& bufferFence) override final;
+     void tonemapAndDrawGainmapInternal(
+             const std::shared_ptr<std::promise<FenceResult>>&& resultPromise,
+diff --git a/libs/renderengine/tests/RenderEngineTest.cpp b/libs/renderengine/tests/RenderEngineTest.cpp
+index 3b3f259..1e8f53a 100644
+--- a/libs/renderengine/tests/RenderEngineTest.cpp
++++ b/libs/renderengine/tests/RenderEngineTest.cpp
+@@ -508,7 +508,7 @@ public:
+     void invokeDraw(const renderengine::DisplaySettings& settings,
+                     const std::vector<renderengine::LayerSettings>& layers) {
+         ftl::Future<FenceResult> future =
+-                mRE->drawLayers(settings, layers, mBuffer, base::unique_fd());
++                mRE->drawLayers(settings, layers, mBuffer, true, base::unique_fd());
+         ASSERT_TRUE(future.valid());
+ 
+         auto result = future.get();
+@@ -1655,7 +1655,8 @@ TEST_P(RenderEngineTest, drawLayers_nullOutputBuffer) {
+     layer.geometry.boundaries = fullscreenRect().toFloatRect();
+     BufferSourceVariant<ForceOpaqueBufferVariant>::fillColor(layer, 1.0f, 0.0f, 0.0f, this);
+     layers.push_back(layer);
+-    ftl::Future<FenceResult> future = mRE->drawLayers(settings, layers, nullptr, base::unique_fd());
++    ftl::Future<FenceResult> future =
++            mRE->drawLayers(settings, layers, nullptr, true, base::unique_fd());
+ 
+     ASSERT_TRUE(future.valid());
+     auto result = future.get();
+@@ -2301,14 +2302,14 @@ TEST_P(RenderEngineTest, cleanupPostRender_cleansUpOnce) {
+     layers.push_back(layer);
+ 
+     ftl::Future<FenceResult> futureOne =
+-            mRE->drawLayers(settings, layers, mBuffer, base::unique_fd());
++            mRE->drawLayers(settings, layers, mBuffer, true, base::unique_fd());
+     ASSERT_TRUE(futureOne.valid());
+     auto resultOne = futureOne.get();
+     ASSERT_TRUE(resultOne.ok());
+     auto fenceOne = resultOne.value();
+ 
+     ftl::Future<FenceResult> futureTwo =
+-            mRE->drawLayers(settings, layers, mBuffer, base::unique_fd(fenceOne->dup()));
++            mRE->drawLayers(settings, layers, mBuffer, true, base::unique_fd(fenceOne->dup()));
+     ASSERT_TRUE(futureTwo.valid());
+     auto resultTwo = futureTwo.get();
+     ASSERT_TRUE(resultTwo.ok());
+diff --git a/libs/renderengine/tests/RenderEngineThreadedTest.cpp b/libs/renderengine/tests/RenderEngineThreadedTest.cpp
+index bdd9402..8b95e6e 100644
+--- a/libs/renderengine/tests/RenderEngineThreadedTest.cpp
++++ b/libs/renderengine/tests/RenderEngineThreadedTest.cpp
+@@ -175,11 +175,11 @@ TEST_F(RenderEngineThreadedTest, drawLayers) {
+             .WillOnce([&](const std::shared_ptr<std::promise<FenceResult>>&& resultPromise,
+                           const renderengine::DisplaySettings&,
+                           const std::vector<renderengine::LayerSettings>&,
+-                          const std::shared_ptr<renderengine::ExternalTexture>&,
++                          const std::shared_ptr<renderengine::ExternalTexture>&, const bool,
+                           base::unique_fd&&) { resultPromise->set_value(Fence::NO_FENCE); });
+ 
+     ftl::Future<FenceResult> future =
+-            mThreadedRE->drawLayers(settings, layers, buffer, std::move(bufferFence));
++            mThreadedRE->drawLayers(settings, layers, buffer, false, std::move(bufferFence));
+     ASSERT_TRUE(future.valid());
+     auto result = future.get();
+     ASSERT_TRUE(result.ok());
+@@ -208,11 +208,11 @@ TEST_F(RenderEngineThreadedTest, drawLayers_protectedLayer) {
+             .WillOnce([&](const std::shared_ptr<std::promise<FenceResult>>&& resultPromise,
+                           const renderengine::DisplaySettings&,
+                           const std::vector<renderengine::LayerSettings>&,
+-                          const std::shared_ptr<renderengine::ExternalTexture>&,
++                          const std::shared_ptr<renderengine::ExternalTexture>&, const bool,
+                           base::unique_fd&&) { resultPromise->set_value(Fence::NO_FENCE); });
+ 
+     ftl::Future<FenceResult> future =
+-            mThreadedRE->drawLayers(settings, layers, buffer, std::move(bufferFence));
++            mThreadedRE->drawLayers(settings, layers, buffer, false, std::move(bufferFence));
+     ASSERT_TRUE(future.valid());
+     auto result = future.get();
+     ASSERT_TRUE(result.ok());
+@@ -236,11 +236,11 @@ TEST_F(RenderEngineThreadedTest, drawLayers_protectedOutputBuffer) {
+             .WillOnce([&](const std::shared_ptr<std::promise<FenceResult>>&& resultPromise,
+                           const renderengine::DisplaySettings&,
+                           const std::vector<renderengine::LayerSettings>&,
+-                          const std::shared_ptr<renderengine::ExternalTexture>&,
++                          const std::shared_ptr<renderengine::ExternalTexture>&, const bool,
+                           base::unique_fd&&) { resultPromise->set_value(Fence::NO_FENCE); });
+ 
+     ftl::Future<FenceResult> future =
+-            mThreadedRE->drawLayers(settings, layers, buffer, std::move(bufferFence));
++            mThreadedRE->drawLayers(settings, layers, buffer, false, std::move(bufferFence));
+     ASSERT_TRUE(future.valid());
+     auto result = future.get();
+     ASSERT_TRUE(result.ok());
+diff --git a/libs/renderengine/threaded/RenderEngineThreaded.cpp b/libs/renderengine/threaded/RenderEngineThreaded.cpp
+index a0e2254..3f6f740 100644
+--- a/libs/renderengine/threaded/RenderEngineThreaded.cpp
++++ b/libs/renderengine/threaded/RenderEngineThreaded.cpp
+@@ -257,7 +257,8 @@ bool RenderEngineThreaded::canSkipPostRenderCleanup() const {
+ void RenderEngineThreaded::drawLayersInternal(
+         const std::shared_ptr<std::promise<FenceResult>>&& resultPromise,
+         const DisplaySettings& display, const std::vector<LayerSettings>& layers,
+-        const std::shared_ptr<ExternalTexture>& buffer, base::unique_fd&& bufferFence) {
++        const std::shared_ptr<ExternalTexture>& buffer, const bool useFramebufferCache,
++        base::unique_fd&& bufferFence) {
+     resultPromise->set_value(Fence::NO_FENCE);
+     return;
+ }
+@@ -273,7 +274,8 @@ void RenderEngineThreaded::tonemapAndDrawGainmapInternal(
+ 
+ ftl::Future<FenceResult> RenderEngineThreaded::drawLayers(
+         const DisplaySettings& display, const std::vector<LayerSettings>& layers,
+-        const std::shared_ptr<ExternalTexture>& buffer, base::unique_fd&& bufferFence) {
++        const std::shared_ptr<ExternalTexture>& buffer, const bool useFramebufferCache,
++        base::unique_fd&& bufferFence) {
+     SFTRACE_CALL();
+     const auto resultPromise = std::make_shared<std::promise<FenceResult>>();
+     std::future<FenceResult> resultFuture = resultPromise->get_future();
+@@ -281,8 +283,8 @@ ftl::Future<FenceResult> RenderEngineThreaded::drawLayers(
+     {
+         std::lock_guard lock(mThreadMutex);
+         mNeedsPostRenderCleanup = true;
+-        mFunctionCalls.push(
+-                [resultPromise, display, layers, buffer, fd](renderengine::RenderEngine& instance) {
++        mFunctionCalls.push([resultPromise, display, layers, buffer, useFramebufferCache,
++                             fd](renderengine::RenderEngine& instance) {
+                     SFTRACE_NAME("REThreaded::drawLayers");
+                     instance.updateProtectedContext(layers, {buffer.get()});
+                     instance.drawLayersInternal(std::move(resultPromise), display, layers, buffer,
+diff --git a/libs/renderengine/threaded/RenderEngineThreaded.h b/libs/renderengine/threaded/RenderEngineThreaded.h
+index 911a5c9..1ce3ebc 100644
+--- a/libs/renderengine/threaded/RenderEngineThreaded.h
++++ b/libs/renderengine/threaded/RenderEngineThreaded.h
+@@ -56,6 +56,7 @@ public:
+     ftl::Future<FenceResult> drawLayers(const DisplaySettings& display,
+                                         const std::vector<LayerSettings>& layers,
+                                         const std::shared_ptr<ExternalTexture>& buffer,
++                                        const bool useFramebufferCache,
+                                         base::unique_fd&& bufferFence) override;
+     ftl::Future<FenceResult> tonemapAndDrawGainmap(
+             const std::shared_ptr<ExternalTexture>& hdr, base::borrowed_fd&& hdrFence,
+@@ -76,7 +77,7 @@ protected:
+                             const DisplaySettings& display,
+                             const std::vector<LayerSettings>& layers,
+                             const std::shared_ptr<ExternalTexture>& buffer,
+-                            base::unique_fd&& bufferFence) override;
++                            const bool useFramebufferCache, base::unique_fd&& bufferFence) override;
+     void tonemapAndDrawGainmapInternal(
+             const std::shared_ptr<std::promise<FenceResult>>&& resultPromise,
+             const std::shared_ptr<ExternalTexture>& hdr, base::borrowed_fd&& hdrFence,
+diff --git a/services/surfaceflinger/CompositionEngine/src/Output.cpp b/services/surfaceflinger/CompositionEngine/src/Output.cpp
+index 92f41cb..8fee18c 100644
+--- a/services/surfaceflinger/CompositionEngine/src/Output.cpp
++++ b/services/surfaceflinger/CompositionEngine/src/Output.cpp
+@@ -1435,9 +1435,17 @@ std::optional<base::unique_fd> Output::composeSurfaces(
+                    });
+ 
+     const nsecs_t renderEngineStart = systemTime();
++    // Only use the framebuffer cache when rendering to an internal display
++    // TODO(b/173560331): This is only to help mitigate memory leaks from virtual displays because
++    // right now we don't have a concrete eviction policy for output buffers: GLESRenderEngine
++    // bounds its framebuffer cache but Skia RenderEngine has no current policy. The best fix is
++    // probably to encapsulate the output buffer into a structure that dispatches resource cleanup
++    // over to RenderEngine, in which case this flag can be removed from the drawLayers interface.
++    const bool useFramebufferCache = outputState.layerFilter.toInternalDisplay;
++
+     auto fenceResult = renderEngine
+                                .drawLayers(clientCompositionDisplay, clientRenderEngineLayers, tex,
+-                                           std::move(fd))
++                                           useFramebufferCache, std::move(fd))
+                                .get();
+ 
+     if (mClientCompositionRequestCache && fenceStatus(fenceResult) != NO_ERROR) {
+diff --git a/services/surfaceflinger/CompositionEngine/src/planner/CachedSet.cpp b/services/surfaceflinger/CompositionEngine/src/planner/CachedSet.cpp
+index a458b5e..4515101 100644
+--- a/services/surfaceflinger/CompositionEngine/src/planner/CachedSet.cpp
++++ b/services/surfaceflinger/CompositionEngine/src/planner/CachedSet.cpp
+@@ -279,9 +279,11 @@ void CachedSet::render(renderengine::RenderEngine& renderEngine, TexturePool& te
+         bufferFence.reset(texture->getReadyFence()->dup());
+     }
+ 
++    constexpr bool kUseFramebufferCache = false;
++
+     auto fenceResult = renderEngine
+                                .drawLayers(displaySettings, layerSettings, texture->get(),
+-                                           std::move(bufferFence))
++                                           kUseFramebufferCache, std::move(bufferFence))
+                                .get();
+ 
+     if (fenceStatus(fenceResult) == NO_ERROR) {
+diff --git a/services/surfaceflinger/CompositionEngine/tests/OutputTest.cpp b/services/surfaceflinger/CompositionEngine/tests/OutputTest.cpp
+index 590626a..61fbbb0 100644
+--- a/services/surfaceflinger/CompositionEngine/tests/OutputTest.cpp
++++ b/services/surfaceflinger/CompositionEngine/tests/OutputTest.cpp
+@@ -3638,10 +3638,10 @@ TEST_F(OutputComposeSurfacesTest, handlesZeroCompositionRequests) {
+             .WillRepeatedly(Return());
+ 
+     EXPECT_CALL(*mRenderSurface, dequeueBuffer(_)).WillRepeatedly(Return(mOutputBuffer));
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, IsEmpty(), _, _))
++    EXPECT_CALL(mRenderEngine, drawLayers(_, IsEmpty(), _, false, _))
+             .WillRepeatedly([&](const renderengine::DisplaySettings&,
+                                 const std::vector<renderengine::LayerSettings>&,
+-                                const std::shared_ptr<renderengine::ExternalTexture>&,
++                                const std::shared_ptr<renderengine::ExternalTexture>&, const bool,
+                                 base::unique_fd&&) -> ftl::Future<FenceResult> {
+                 return ftl::yield<FenceResult>(Fence::NO_FENCE);
+             });
+@@ -3669,10 +3669,10 @@ TEST_F(OutputComposeSurfacesTest, buildsAndRendersRequestList) {
+                     }));
+ 
+     EXPECT_CALL(*mRenderSurface, dequeueBuffer(_)).WillRepeatedly(Return(mOutputBuffer));
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, ElementsAre(r1, r2), _, _))
++    EXPECT_CALL(mRenderEngine, drawLayers(_, ElementsAre(r1, r2), _, false, _))
+             .WillRepeatedly([&](const renderengine::DisplaySettings&,
+                                 const std::vector<renderengine::LayerSettings>&,
+-                                const std::shared_ptr<renderengine::ExternalTexture>&,
++                                const std::shared_ptr<renderengine::ExternalTexture>&, const bool,
+                                 base::unique_fd&&) -> ftl::Future<FenceResult> {
+                 return ftl::yield<FenceResult>(Fence::NO_FENCE);
+             });
+@@ -3703,10 +3703,10 @@ TEST_F(OutputComposeSurfacesTest,
+                     }));
+ 
+     EXPECT_CALL(*mRenderSurface, dequeueBuffer(_)).WillRepeatedly(Return(mOutputBuffer));
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, ElementsAre(r1, r2), _, _))
++    EXPECT_CALL(mRenderEngine, drawLayers(_, ElementsAre(r1, r2), _, true, _))
+             .WillRepeatedly([&](const renderengine::DisplaySettings&,
+                                 const std::vector<renderengine::LayerSettings>&,
+-                                const std::shared_ptr<renderengine::ExternalTexture>&,
++                                const std::shared_ptr<renderengine::ExternalTexture>&, const bool,
+                                 base::unique_fd&&) -> ftl::Future<FenceResult> {
+                 return ftl::yield<FenceResult>(Fence::NO_FENCE);
+             });
+@@ -3732,7 +3732,7 @@ TEST_F(OutputComposeSurfacesTest, renderDuplicateClientCompositionRequestsWithou
+             .WillRepeatedly(Return());
+ 
+     EXPECT_CALL(*mRenderSurface, dequeueBuffer(_)).WillRepeatedly(Return(mOutputBuffer));
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, ElementsAre(r1, r2), _, _))
++    EXPECT_CALL(mRenderEngine, drawLayers(_, ElementsAre(r1, r2), _, false, _))
+             .Times(2)
+             .WillOnce(Return(ByMove(ftl::yield<FenceResult>(Fence::NO_FENCE))))
+             .WillOnce(Return(ByMove(ftl::yield<FenceResult>(Fence::NO_FENCE))));
+@@ -3762,7 +3762,7 @@ TEST_F(OutputComposeSurfacesTest, skipDuplicateClientCompositionRequests) {
+             .WillRepeatedly(Return());
+ 
+     EXPECT_CALL(*mRenderSurface, dequeueBuffer(_)).WillRepeatedly(Return(mOutputBuffer));
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, ElementsAre(r1, r2), _, _))
++    EXPECT_CALL(mRenderEngine, drawLayers(_, ElementsAre(r1, r2), _, false, _))
+             .WillOnce(Return(ByMove(ftl::yield<FenceResult>(Fence::NO_FENCE))));
+     EXPECT_CALL(mOutput, setExpensiveRenderingExpected(false));
+ 
+@@ -3846,10 +3846,10 @@ TEST_F(OutputComposeSurfacesTest, clientCompositionIfBufferChanges) {
+             .WillOnce(Return(mOutputBuffer))
+             .WillOnce(Return(otherOutputBuffer));
+     base::unique_fd fd(open("/dev/null", O_RDONLY));
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, ElementsAre(r1, r2), _, _))
++    EXPECT_CALL(mRenderEngine, drawLayers(_, ElementsAre(r1, r2), _, false, _))
+             .WillRepeatedly([&](const renderengine::DisplaySettings&,
+                                 const std::vector<renderengine::LayerSettings>&,
+-                                const std::shared_ptr<renderengine::ExternalTexture>&,
++                                const std::shared_ptr<renderengine::ExternalTexture>&, const bool,
+                                 base::unique_fd&&) -> ftl::Future<FenceResult> {
+                 return ftl::yield<FenceResult>(sp<Fence>::make(std::move(fd)));
+             });
+@@ -3884,9 +3884,9 @@ TEST_F(OutputComposeSurfacesTest, clientCompositionIfRequestChanges) {
+             .WillRepeatedly(Return());
+ 
+     EXPECT_CALL(*mRenderSurface, dequeueBuffer(_)).WillRepeatedly(Return(mOutputBuffer));
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, ElementsAre(r1, r2), _, _))
++    EXPECT_CALL(mRenderEngine, drawLayers(_, ElementsAre(r1, r2), _, false, _))
+             .WillOnce(Return(ByMove(ftl::yield<FenceResult>(Fence::NO_FENCE))));
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, ElementsAre(r1, r3), _, _))
++    EXPECT_CALL(mRenderEngine, drawLayers(_, ElementsAre(r1, r3), _, false, _))
+             .WillOnce(Return(ByMove(ftl::yield<FenceResult>(Fence::NO_FENCE))));
+ 
+     verify().execute().expectAFenceWasReturned();
+@@ -4000,7 +4000,7 @@ struct OutputComposeSurfacesTest_UsesExpectedDisplaySettings : public OutputComp
+     struct ExpectDisplaySettingsState
+           : public CallOrderStateMachineHelper<TestType, ExpectDisplaySettingsState> {
+         auto thenExpectDisplaySettingsUsed(renderengine::DisplaySettings settings) {
+-            EXPECT_CALL(getInstance()->mRenderEngine, drawLayers(settings, _, _, _))
++            EXPECT_CALL(getInstance()->mRenderEngine, drawLayers(settings, _, _, false, _))
+                     .WillOnce(Return(ByMove(ftl::yield<FenceResult>(Fence::NO_FENCE))));
+             return nextState<ExecuteState>();
+         }
+@@ -4309,11 +4309,11 @@ struct OutputComposeSurfacesTest_HandlesProtectedContent : public OutputComposeS
+         EXPECT_CALL(mOutput, appendRegionFlashRequests(RegionEq(kDebugRegion), _))
+                 .WillRepeatedly(Return());
+         EXPECT_CALL(*mRenderSurface, dequeueBuffer(_)).WillRepeatedly(Return(mOutputBuffer));
+-        EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _))
++        EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, false, _))
+                 .WillRepeatedly([&](const renderengine::DisplaySettings&,
+                                     const std::vector<renderengine::LayerSettings>&,
+                                     const std::shared_ptr<renderengine::ExternalTexture>&,
+-                                    base::unique_fd&&) -> ftl::Future<FenceResult> {
++                                    const bool, base::unique_fd&&) -> ftl::Future<FenceResult> {
+                     return ftl::yield<FenceResult>(Fence::NO_FENCE);
+                 });
+     }
+@@ -4358,7 +4358,7 @@ TEST_F(OutputComposeSurfacesTest_HandlesProtectedContent, ifNotEnabled) {
+     EXPECT_CALL(*mRenderSurface, setProtected(true));
+     // Must happen after setting the protected content state.
+     EXPECT_CALL(*mRenderSurface, dequeueBuffer(_)).WillRepeatedly(Return(mOutputBuffer));
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _))
++    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, false, _))
+             .WillOnce(Return(ByMove(ftl::yield<FenceResult>(Fence::NO_FENCE))));
+ 
+     base::unique_fd fd;
+@@ -4427,7 +4427,7 @@ TEST_F(OutputComposeSurfacesTest_SetsExpensiveRendering, IfExepensiveOutputDatas
+     InSequence seq;
+ 
+     EXPECT_CALL(mOutput, setExpensiveRenderingExpected(true));
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _))
++    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, false, _))
+             .WillOnce(Return(ByMove(ftl::yield<FenceResult>(Fence::NO_FENCE))));
+ 
+     base::unique_fd fd;
+diff --git a/services/surfaceflinger/CompositionEngine/tests/planner/CachedSetTest.cpp b/services/surfaceflinger/CompositionEngine/tests/planner/CachedSetTest.cpp
+index 5b33407..a5aca89 100644
+--- a/services/surfaceflinger/CompositionEngine/tests/planner/CachedSetTest.cpp
++++ b/services/surfaceflinger/CompositionEngine/tests/planner/CachedSetTest.cpp
+@@ -353,7 +353,7 @@ TEST_F(CachedSetTest, renderUnsecureOutput) {
+ 
+     const auto drawLayers = [&](const renderengine::DisplaySettings& displaySettings,
+                                 const std::vector<renderengine::LayerSettings>& layers,
+-                                const std::shared_ptr<renderengine::ExternalTexture>&,
++                                const std::shared_ptr<renderengine::ExternalTexture>&, const bool,
+                                 base::unique_fd&&) -> ftl::Future<FenceResult> {
+         EXPECT_EQ(mOutputState.framebufferSpace.getContent(), displaySettings.physicalDisplay);
+         EXPECT_EQ(mOutputState.layerStackSpace.getContent(), displaySettings.clip);
+@@ -369,7 +369,7 @@ TEST_F(CachedSetTest, renderUnsecureOutput) {
+             .WillOnce(Return(clientComp1));
+     EXPECT_CALL(*layerFE2, prepareClientComposition(ClientCompositionTargetSettingsSecureEq(false)))
+             .WillOnce(Return(clientComp2));
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _)).WillOnce(Invoke(drawLayers));
++    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _, _)).WillOnce(Invoke(drawLayers));
+     mOutputState.isSecure = false;
+     cachedSet.render(mRenderEngine, mTexturePool, mOutputState, true);
+     expectReadyBuffer(cachedSet);
+@@ -402,7 +402,7 @@ TEST_F(CachedSetTest, renderSecureOutput) {
+ 
+     const auto drawLayers = [&](const renderengine::DisplaySettings& displaySettings,
+                                 const std::vector<renderengine::LayerSettings>& layers,
+-                                const std::shared_ptr<renderengine::ExternalTexture>&,
++                                const std::shared_ptr<renderengine::ExternalTexture>&, const bool,
+                                 base::unique_fd&&) -> ftl::Future<FenceResult> {
+         EXPECT_EQ(mOutputState.framebufferSpace.getContent(), displaySettings.physicalDisplay);
+         EXPECT_EQ(mOutputState.layerStackSpace.getContent(), displaySettings.clip);
+@@ -419,7 +419,7 @@ TEST_F(CachedSetTest, renderSecureOutput) {
+             .WillOnce(Return(clientComp1));
+     EXPECT_CALL(*layerFE2, prepareClientComposition(ClientCompositionTargetSettingsSecureEq(true)))
+             .WillOnce(Return(clientComp2));
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _)).WillOnce(Invoke(drawLayers));
++    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _, _)).WillOnce(Invoke(drawLayers));
+     mOutputState.isSecure = true;
+     cachedSet.render(mRenderEngine, mTexturePool, mOutputState, true);
+     expectReadyBuffer(cachedSet);
+@@ -452,7 +452,7 @@ TEST_F(CachedSetTest, renderWhitePoint) {
+ 
+     const auto drawLayers = [&](const renderengine::DisplaySettings& displaySettings,
+                                 const std::vector<renderengine::LayerSettings>&,
+-                                const std::shared_ptr<renderengine::ExternalTexture>&,
++                                const std::shared_ptr<renderengine::ExternalTexture>&, const bool,
+                                 base::unique_fd&&) -> ftl::Future<FenceResult> {
+         EXPECT_EQ(mOutputState.displayBrightnessNits, displaySettings.targetLuminanceNits);
+         return ftl::yield<FenceResult>(Fence::NO_FENCE);
+@@ -466,7 +466,7 @@ TEST_F(CachedSetTest, renderWhitePoint) {
+                 prepareClientComposition(ClientCompositionTargetSettingsWhitePointEq(
+                         mOutputState.displayBrightnessNits)))
+             .WillOnce(Return(clientComp2));
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _)).WillOnce(Invoke(drawLayers));
++    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _, _)).WillOnce(Invoke(drawLayers));
+     mOutputState.isSecure = true;
+     cachedSet.render(mRenderEngine, mTexturePool, mOutputState, true);
+     expectReadyBuffer(cachedSet);
+@@ -502,7 +502,7 @@ TEST_F(CachedSetTest, renderWhitePointNoColorTransform) {
+ 
+     const auto drawLayers = [&](const renderengine::DisplaySettings& displaySettings,
+                                 const std::vector<renderengine::LayerSettings>&,
+-                                const std::shared_ptr<renderengine::ExternalTexture>&,
++                                const std::shared_ptr<renderengine::ExternalTexture>&, const bool,
+                                 base::unique_fd&&) -> ftl::Future<FenceResult> {
+         EXPECT_EQ(mOutputState.displayBrightnessNits, displaySettings.targetLuminanceNits);
+         return ftl::yield<FenceResult>(Fence::NO_FENCE);
+@@ -516,7 +516,7 @@ TEST_F(CachedSetTest, renderWhitePointNoColorTransform) {
+                 prepareClientComposition(ClientCompositionTargetSettingsWhitePointEq(
+                         mOutputState.displayBrightnessNits)))
+             .WillOnce(Return(clientComp2));
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _)).WillOnce(Invoke(drawLayers));
++    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _, _)).WillOnce(Invoke(drawLayers));
+     mOutputState.isSecure = true;
+     cachedSet.render(mRenderEngine, mTexturePool, mOutputState, false);
+     expectReadyBuffer(cachedSet);
+@@ -551,7 +551,7 @@ TEST_F(CachedSetTest, rendersWithOffsetFramebufferContent) {
+ 
+     const auto drawLayers = [&](const renderengine::DisplaySettings& displaySettings,
+                                 const std::vector<renderengine::LayerSettings>& layers,
+-                                const std::shared_ptr<renderengine::ExternalTexture>&,
++                                const std::shared_ptr<renderengine::ExternalTexture>&, const bool,
+                                 base::unique_fd&&) -> ftl::Future<FenceResult> {
+         EXPECT_EQ(mOutputState.framebufferSpace.getContent(), displaySettings.physicalDisplay);
+         EXPECT_EQ(mOutputState.layerStackSpace.getContent(), displaySettings.clip);
+@@ -566,7 +566,7 @@ TEST_F(CachedSetTest, rendersWithOffsetFramebufferContent) {
+ 
+     EXPECT_CALL(*layerFE1, prepareClientComposition(_)).WillOnce(Return(clientComp1));
+     EXPECT_CALL(*layerFE2, prepareClientComposition(_)).WillOnce(Return(clientComp2));
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _)).WillOnce(Invoke(drawLayers));
++    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _, _)).WillOnce(Invoke(drawLayers));
+     cachedSet.render(mRenderEngine, mTexturePool, mOutputState, true);
+     expectReadyBuffer(cachedSet);
+ 
+@@ -815,7 +815,7 @@ TEST_F(CachedSetTest, addHolePunch) {
+ 
+     const auto drawLayers = [&](const renderengine::DisplaySettings&,
+                                 const std::vector<renderengine::LayerSettings>& layers,
+-                                const std::shared_ptr<renderengine::ExternalTexture>&,
++                                const std::shared_ptr<renderengine::ExternalTexture>&, const bool,
+                                 base::unique_fd&&) -> ftl::Future<FenceResult> {
+         // If the highlight layer is enabled, it will increase the size by 1.
+         // We're interested in the third layer either way.
+@@ -839,7 +839,7 @@ TEST_F(CachedSetTest, addHolePunch) {
+         return ftl::yield<FenceResult>(Fence::NO_FENCE);
+     };
+ 
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _)).WillOnce(Invoke(drawLayers));
++    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _, _)).WillOnce(Invoke(drawLayers));
+     cachedSet.render(mRenderEngine, mTexturePool, mOutputState, true);
+ }
+ 
+@@ -875,7 +875,7 @@ TEST_F(CachedSetTest, addHolePunch_noBuffer) {
+ 
+     const auto drawLayers = [&](const renderengine::DisplaySettings&,
+                                 const std::vector<renderengine::LayerSettings>& layers,
+-                                const std::shared_ptr<renderengine::ExternalTexture>&,
++                                const std::shared_ptr<renderengine::ExternalTexture>&, const bool,
+                                 base::unique_fd&&) -> ftl::Future<FenceResult> {
+         // If the highlight layer is enabled, it will increase the size by 1.
+         // We're interested in the third layer either way.
+@@ -900,7 +900,7 @@ TEST_F(CachedSetTest, addHolePunch_noBuffer) {
+         return ftl::yield<FenceResult>(Fence::NO_FENCE);
+     };
+ 
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _)).WillOnce(Invoke(drawLayers));
++    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _, _)).WillOnce(Invoke(drawLayers));
+     cachedSet.render(mRenderEngine, mTexturePool, mOutputState, true);
+ }
+ 
+@@ -1026,7 +1026,7 @@ TEST_F(CachedSetTest, addBlur) {
+ 
+     const auto drawLayers = [&](const renderengine::DisplaySettings&,
+                                 const std::vector<renderengine::LayerSettings>& layers,
+-                                const std::shared_ptr<renderengine::ExternalTexture>&,
++                                const std::shared_ptr<renderengine::ExternalTexture>&, const bool,
+                                 base::unique_fd&&) -> ftl::Future<FenceResult> {
+         // If the highlight layer is enabled, it will increase the size by 1.
+         // We're interested in the third layer either way.
+@@ -1039,7 +1039,7 @@ TEST_F(CachedSetTest, addBlur) {
+         return ftl::yield<FenceResult>(Fence::NO_FENCE);
+     };
+ 
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _)).WillOnce(Invoke(drawLayers));
++    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _, _)).WillOnce(Invoke(drawLayers));
+     cachedSet.render(mRenderEngine, mTexturePool, mOutputState, true);
+ }
+ 
+diff --git a/services/surfaceflinger/CompositionEngine/tests/planner/FlattenerTest.cpp b/services/surfaceflinger/CompositionEngine/tests/planner/FlattenerTest.cpp
+index 54ee0ef..9cd6db7 100644
+--- a/services/surfaceflinger/CompositionEngine/tests/planner/FlattenerTest.cpp
++++ b/services/surfaceflinger/CompositionEngine/tests/planner/FlattenerTest.cpp
+@@ -171,7 +171,7 @@ void FlattenerTest::initializeFlattener(const std::vector<const LayerState*>& la
+ 
+ void FlattenerTest::expectAllLayersFlattened(const std::vector<const LayerState*>& layers) {
+     // layers would be flattened but the buffer would not be overridden
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _))
++    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _, _))
+             .WillOnce(Return(ByMove(ftl::yield<FenceResult>(Fence::NO_FENCE))));
+ 
+     initializeOverrideBuffer(layers);
+@@ -447,7 +447,7 @@ TEST_F(FlattenerTest, flattenLayers_BufferUpdateToFlatten) {
+     // caleed for Layer2 and Layer3
+     layerState1->resetFramesSinceBufferUpdate();
+ 
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _))
++    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _, _))
+             .WillOnce(Return(ByMove(ftl::yield<FenceResult>(Fence::NO_FENCE))));
+     initializeOverrideBuffer(layers);
+     EXPECT_EQ(getNonBufferHash(layers),
+@@ -470,7 +470,7 @@ TEST_F(FlattenerTest, flattenLayers_BufferUpdateToFlatten) {
+     layerState1->incrementFramesSinceBufferUpdate();
+     mTime += 200ms;
+ 
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _))
++    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _, _))
+             .WillOnce(Return(ByMove(ftl::yield<FenceResult>(Fence::NO_FENCE))));
+     initializeOverrideBuffer(layers);
+     EXPECT_NE(getNonBufferHash(layers),
+@@ -522,7 +522,7 @@ TEST_F(FlattenerTest, flattenLayers_BufferUpdateForMiddleLayer) {
+     // called for Layer1 and Layer2
+     layerState3->resetFramesSinceBufferUpdate();
+ 
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _))
++    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _, _))
+             .WillOnce(Return(ByMove(ftl::yield<FenceResult>(Fence::NO_FENCE))));
+     initializeOverrideBuffer(layers);
+     EXPECT_EQ(getNonBufferHash(layers),
+@@ -536,7 +536,7 @@ TEST_F(FlattenerTest, flattenLayers_BufferUpdateForMiddleLayer) {
+     EXPECT_EQ(nullptr, overrideBuffer5);
+ 
+     // Layers 1 and 2 will be flattened a new drawFrame would be called for Layer4 and Layer5
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _))
++    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _, _))
+             .WillOnce(Return(ByMove(ftl::yield<FenceResult>(Fence::NO_FENCE))));
+     initializeOverrideBuffer(layers);
+     EXPECT_NE(getNonBufferHash(layers),
+@@ -565,7 +565,7 @@ TEST_F(FlattenerTest, flattenLayers_BufferUpdateForMiddleLayer) {
+ 
+     layerState3->incrementFramesSinceBufferUpdate();
+     mTime += 200ms;
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _))
++    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _, _))
+             .WillOnce(Return(ByMove(ftl::yield<FenceResult>(Fence::NO_FENCE))));
+     initializeOverrideBuffer(layers);
+     EXPECT_NE(getNonBufferHash(layers),
+@@ -620,7 +620,7 @@ TEST_F(FlattenerTest, flattenLayers_pipRequiresRoundedCorners) {
+               mFlattener->flattenLayers(layers, getNonBufferHash(layers), mTime));
+ 
+     // This will render a CachedSet.
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _))
++    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _, _))
+             .WillOnce(Return(ByMove(ftl::yield<FenceResult>(Fence::NO_FENCE))));
+     mFlattener->renderCachedSets(mOutputState, std::nullopt, true);
+ 
+@@ -631,7 +631,7 @@ TEST_F(FlattenerTest, flattenLayers_pipRequiresRoundedCorners) {
+ 
+     // This time we merge the CachedSet in, so we have a new hash, and we should
+     // only have two sets.
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _)).Times(0);
++    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _, _)).Times(0);
+     initializeOverrideBuffer(layers);
+     EXPECT_NE(getNonBufferHash(layers),
+               mFlattener->flattenLayers(layers, getNonBufferHash(layers), mTime));
+@@ -684,7 +684,7 @@ TEST_F(FlattenerTest, flattenLayers_pip) {
+               mFlattener->flattenLayers(layers, getNonBufferHash(layers), mTime));
+ 
+     // This will render a CachedSet.
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _))
++    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _, _))
+             .WillOnce(Return(ByMove(ftl::yield<FenceResult>(Fence::NO_FENCE))));
+     mFlattener->renderCachedSets(mOutputState, std::nullopt, true);
+ 
+@@ -695,7 +695,7 @@ TEST_F(FlattenerTest, flattenLayers_pip) {
+ 
+     // This time we merge the CachedSet in, so we have a new hash, and we should
+     // only have two sets.
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _)).Times(0);
++    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _, _)).Times(0);
+     initializeOverrideBuffer(layers);
+     EXPECT_NE(getNonBufferHash(layers),
+               mFlattener->flattenLayers(layers, getNonBufferHash(layers), mTime));
+@@ -756,7 +756,7 @@ TEST_F(FlattenerTest, flattenLayers_holePunchSingleLayer) {
+ 
+     // This will render a CachedSet of layer 0. Though it is just one layer, it satisfies the
+     // exception that there would be a hole punch above it.
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _))
++    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _, _))
+             .WillOnce(Return(ByMove(ftl::yield<FenceResult>(Fence::NO_FENCE))));
+     mFlattener->renderCachedSets(mOutputState, std::nullopt, true);
+ 
+@@ -764,7 +764,7 @@ TEST_F(FlattenerTest, flattenLayers_holePunchSingleLayer) {
+     EXPECT_EQ(nullptr, overrideBuffer0);
+ 
+     // This time we merge the CachedSet in and we should still have only two sets.
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _)).Times(0);
++    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _, _)).Times(0);
+     initializeOverrideBuffer(layers);
+     EXPECT_EQ(getNonBufferHash(layers),
+               mFlattener->flattenLayers(layers, getNonBufferHash(layers), mTime));
+@@ -826,7 +826,7 @@ TEST_F(FlattenerTest, flattenLayers_holePunchSingleColorLayer) {
+ 
+     // This will render a CachedSet of layer 0. Though it is just one layer, it satisfies the
+     // exception that there would be a hole punch above it.
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _))
++    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _, _))
+             .WillOnce(Return(ByMove(ftl::yield<FenceResult>(Fence::NO_FENCE))));
+     mFlattener->renderCachedSets(mOutputState, std::nullopt, true);
+ 
+@@ -834,7 +834,7 @@ TEST_F(FlattenerTest, flattenLayers_holePunchSingleColorLayer) {
+     EXPECT_EQ(nullptr, overrideBuffer0);
+ 
+     // This time we merge the CachedSet in and we should still have only two sets.
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _)).Times(0);
++    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _, _)).Times(0);
+     initializeOverrideBuffer(layers);
+     EXPECT_EQ(getNonBufferHash(layers),
+               mFlattener->flattenLayers(layers, getNonBufferHash(layers), mTime));
+@@ -877,7 +877,7 @@ TEST_F(FlattenerTest, flattenLayers_flattensBlurBehindRunIfFirstRun) {
+     layerState3->resetFramesSinceBufferUpdate();
+ 
+     // layers would be flattened but the buffer would not be overridden
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _))
++    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _, _))
+             .WillOnce(Return(ByMove(ftl::yield<FenceResult>(Fence::NO_FENCE))));
+ 
+     initializeOverrideBuffer(layers);
+@@ -922,7 +922,7 @@ TEST_F(FlattenerTest, flattenLayers_doesNotFlattenBlurBehindRun) {
+     layerState1->resetFramesSinceBufferUpdate();
+ 
+     // layers would be flattened but the buffer would not be overridden
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _))
++    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _, _))
+             .WillRepeatedly(Return(ByMove(ftl::yield<FenceResult>(Fence::NO_FENCE))));
+ 
+     initializeOverrideBuffer(layers);
+@@ -975,7 +975,7 @@ TEST_F(FlattenerTest, flattenLayers_flattenSkipsLayerWithBlurBehind) {
+     layerState1->resetFramesSinceBufferUpdate();
+ 
+     // layers would be flattened but the buffer would not be overridden
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _))
++    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _, _))
+             .WillOnce(Return(ByMove(ftl::yield<FenceResult>(Fence::NO_FENCE))));
+ 
+     initializeOverrideBuffer(layers);
+@@ -1023,7 +1023,7 @@ TEST_F(FlattenerTest, flattenLayers_whenBlurLayerIsChanging_appliesBlurToInactiv
+     layerStateWithBlurBehind->resetFramesSinceBufferUpdate();
+ 
+     // layers would be flattened but the buffer would not be overridden
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _))
++    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _, _))
+             .WillOnce(Return(ByMove(ftl::yield<FenceResult>(Fence::NO_FENCE))));
+ 
+     initializeOverrideBuffer(layers);
+@@ -1065,7 +1065,7 @@ TEST_F(FlattenerTest, flattenLayers_renderCachedSets_doesNotRenderTwice) {
+     // Mark the layers inactive
+     mTime += 200ms;
+     // layers would be flattened but the buffer would not be overridden
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _))
++    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _, _))
+             .WillOnce(Return(ByMove(ftl::yield<FenceResult>(Fence::NO_FENCE))));
+ 
+     initializeOverrideBuffer(layers);
+@@ -1078,7 +1078,7 @@ TEST_F(FlattenerTest, flattenLayers_renderCachedSets_doesNotRenderTwice) {
+ 
+     // Simulate attempting to render prior to merging the new cached set with the layer stack.
+     // Here we should not try to re-render.
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _)).Times(0);
++    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _, _)).Times(0);
+     mFlattener->renderCachedSets(mOutputState, std::nullopt, true);
+ 
+     // We provide the override buffer now that it's rendered
+@@ -1125,14 +1125,14 @@ TEST_F(FlattenerRenderSchedulingTest, flattenLayers_renderCachedSets_defersUpToM
+               mFlattener->flattenLayers(layers, getNonBufferHash(layers), mTime));
+ 
+     for (size_t i = 0; i < kMaxDeferRenderAttempts; i++) {
+-        EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _)).Times(0);
++        EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _, _)).Times(0);
+         mFlattener->renderCachedSets(mOutputState,
+                                      std::chrono::steady_clock::now() -
+                                              (kCachedSetRenderDuration + 10ms),
+                                      true);
+     }
+ 
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _))
++    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _, _))
+             .WillOnce(Return(ByMove(ftl::yield<FenceResult>(Fence::NO_FENCE))));
+     mFlattener->renderCachedSets(mOutputState,
+                                  std::chrono::steady_clock::now() -
+@@ -1167,7 +1167,7 @@ TEST_F(FlattenerTest, flattenLayers_skipsLayersDisabledFromCaching) {
+               mFlattener->flattenLayers(layers, getNonBufferHash(layers), mTime));
+ 
+     // This will render a CachedSet.
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _))
++    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _, _))
+             .WillOnce(Return(ByMove(ftl::yield<FenceResult>(Fence::NO_FENCE))));
+     mFlattener->renderCachedSets(mOutputState, std::nullopt, true);
+ 
+@@ -1178,7 +1178,7 @@ TEST_F(FlattenerTest, flattenLayers_skipsLayersDisabledFromCaching) {
+ 
+     // This time we merge the CachedSet in, so we have a new hash, and we should
+     // only have two sets.
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _)).Times(0);
++    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _, _)).Times(0);
+     initializeOverrideBuffer(layers);
+     EXPECT_NE(getNonBufferHash(layers),
+               mFlattener->flattenLayers(layers, getNonBufferHash(layers), mTime));
+@@ -1217,7 +1217,7 @@ TEST_F(FlattenerTest, flattenLayers_skipsBT601_625) {
+               mFlattener->flattenLayers(layers, getNonBufferHash(layers), mTime));
+ 
+     // This will render a CachedSet.
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _))
++    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _, _))
+             .WillOnce(Return(ByMove(ftl::yield<FenceResult>(Fence::NO_FENCE))));
+     mFlattener->renderCachedSets(mOutputState, std::nullopt, true);
+ 
+@@ -1228,7 +1228,7 @@ TEST_F(FlattenerTest, flattenLayers_skipsBT601_625) {
+ 
+     // This time we merge the CachedSet in, so we have a new hash, and we should
+     // only have two sets.
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _)).Times(0);
++    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _, _)).Times(0);
+     initializeOverrideBuffer(layers);
+     EXPECT_NE(getNonBufferHash(layers),
+               mFlattener->flattenLayers(layers, getNonBufferHash(layers), mTime));
+@@ -1267,7 +1267,7 @@ TEST_F(FlattenerTest, flattenLayers_skipsHDR) {
+               mFlattener->flattenLayers(layers, getNonBufferHash(layers), mTime));
+ 
+     // This will render a CachedSet.
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _))
++    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _, _))
+             .WillOnce(Return(ByMove(ftl::yield<FenceResult>(Fence::NO_FENCE))));
+     mFlattener->renderCachedSets(mOutputState, std::nullopt, true);
+ 
+@@ -1278,7 +1278,7 @@ TEST_F(FlattenerTest, flattenLayers_skipsHDR) {
+ 
+     // This time we merge the CachedSet in, so we have a new hash, and we should
+     // only have two sets.
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _)).Times(0);
++    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _, _)).Times(0);
+     initializeOverrideBuffer(layers);
+     EXPECT_NE(getNonBufferHash(layers),
+               mFlattener->flattenLayers(layers, getNonBufferHash(layers), mTime));
+@@ -1317,7 +1317,7 @@ TEST_F(FlattenerTest, flattenLayers_skipsHDR2) {
+               mFlattener->flattenLayers(layers, getNonBufferHash(layers), mTime));
+ 
+     // This will render a CachedSet.
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _))
++    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _, _))
+             .WillOnce(Return(ByMove(ftl::yield<FenceResult>(Fence::NO_FENCE))));
+     mFlattener->renderCachedSets(mOutputState, std::nullopt, true);
+ 
+@@ -1328,7 +1328,7 @@ TEST_F(FlattenerTest, flattenLayers_skipsHDR2) {
+ 
+     // This time we merge the CachedSet in, so we have a new hash, and we should
+     // only have two sets.
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _)).Times(0);
++    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _, _)).Times(0);
+     initializeOverrideBuffer(layers);
+     EXPECT_NE(getNonBufferHash(layers),
+               mFlattener->flattenLayers(layers, getNonBufferHash(layers), mTime));
+@@ -1419,7 +1419,7 @@ TEST_F(FlattenerTest, flattenLayers_skipsColorLayers) {
+               mFlattener->flattenLayers(layers, getNonBufferHash(layers), mTime));
+ 
+     // This will render a CachedSet.
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _))
++    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _, _))
+             .WillOnce(Return(ByMove(ftl::yield<FenceResult>(Fence::NO_FENCE))));
+     mFlattener->renderCachedSets(mOutputState, std::nullopt, true);
+ 
+@@ -1431,7 +1431,7 @@ TEST_F(FlattenerTest, flattenLayers_skipsColorLayers) {
+ 
+     // This time we merge the CachedSet in, so we have a new hash, and we should
+     // only have two sets.
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _)).Times(0);
++    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _, _)).Times(0);
+     initializeOverrideBuffer(layers);
+     EXPECT_NE(getNonBufferHash(layers),
+               mFlattener->flattenLayers(layers, getNonBufferHash(layers), mTime));
+@@ -1471,7 +1471,7 @@ TEST_F(FlattenerTest, flattenLayers_includes_DISPLAY_DECORATION) {
+               mFlattener->flattenLayers(layers, getNonBufferHash(layers), mTime));
+ 
+     // This will render a CachedSet.
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _))
++    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _, _))
+             .WillOnce(Return(ByMove(ftl::yield<FenceResult>(Fence::NO_FENCE))));
+     mFlattener->renderCachedSets(mOutputState, std::nullopt, true);
+ 
+@@ -1482,7 +1482,7 @@ TEST_F(FlattenerTest, flattenLayers_includes_DISPLAY_DECORATION) {
+ 
+     // This time we merge the CachedSet in, so we have a new hash, and we should
+     // only have two sets.
+-    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _)).Times(0);
++    EXPECT_CALL(mRenderEngine, drawLayers(_, _, _, _, _)).Times(0);
+     initializeOverrideBuffer(layers);
+     EXPECT_NE(getNonBufferHash(layers),
+               mFlattener->flattenLayers(layers, getNonBufferHash(layers), mTime));
+diff --git a/services/surfaceflinger/tests/unittests/CompositionTest.cpp b/services/surfaceflinger/tests/unittests/CompositionTest.cpp
+index c53b5d4..b4ab6ce 100644
+--- a/services/surfaceflinger/tests/unittests/CompositionTest.cpp
++++ b/services/surfaceflinger/tests/unittests/CompositionTest.cpp
+@@ -317,7 +317,7 @@ struct BaseDisplayVariant {
+                 .WillRepeatedly([&](const renderengine::DisplaySettings& displaySettings,
+                                     const std::vector<renderengine::LayerSettings>&,
+                                     const std::shared_ptr<renderengine::ExternalTexture>&,
+-                                    base::unique_fd&&) -> ftl::Future<FenceResult> {
++                                    const bool, base::unique_fd&&) -> ftl::future<FenceResult> {
+                     EXPECT_EQ(DEFAULT_DISPLAY_MAX_LUMINANCE, displaySettings.maxLuminance);
+                     EXPECT_EQ(Rect(DEFAULT_DISPLAY_WIDTH, DEFAULT_DISPLAY_HEIGHT),
+                               displaySettings.physicalDisplay);
+@@ -368,7 +368,7 @@ struct BaseDisplayVariant {
+                 .WillRepeatedly([&](const renderengine::DisplaySettings& displaySettings,
+                                     const std::vector<renderengine::LayerSettings>&,
+                                     const std::shared_ptr<renderengine::ExternalTexture>&,
+-                                    base::unique_fd&&) -> ftl::Future<FenceResult> {
++                                    const bool, base::unique_fd&&) -> ftl::future<FenceResult> {
+                     EXPECT_EQ(DEFAULT_DISPLAY_MAX_LUMINANCE, displaySettings.maxLuminance);
+                     EXPECT_EQ(Rect(DEFAULT_DISPLAY_WIDTH, DEFAULT_DISPLAY_HEIGHT),
+                               displaySettings.physicalDisplay);
+@@ -561,8 +561,8 @@ struct BaseLayerProperties {
+         EXPECT_CALL(*test->mRenderEngine, drawLayers)
+                 .WillOnce([&](const renderengine::DisplaySettings& displaySettings,
+                               const std::vector<renderengine::LayerSettings>& layerSettings,
+-                              const std::shared_ptr<renderengine::ExternalTexture>&,
+-                              base::unique_fd&&) -> ftl::Future<FenceResult> {
++                              const std::shared_ptr<renderengine::ExternalTexture>&, const bool,
++                              base::unique_fd&&) -> ftl::future<FenceResult> {
+                     EXPECT_EQ(DEFAULT_DISPLAY_MAX_LUMINANCE, displaySettings.maxLuminance);
+                     EXPECT_EQ(Rect(DEFAULT_DISPLAY_WIDTH, DEFAULT_DISPLAY_HEIGHT),
+                               displaySettings.physicalDisplay);
+@@ -612,8 +612,8 @@ struct BaseLayerProperties {
+         EXPECT_CALL(*test->mRenderEngine, drawLayers)
+                 .WillOnce([&](const renderengine::DisplaySettings& displaySettings,
+                               const std::vector<renderengine::LayerSettings>& layerSettings,
+-                              const std::shared_ptr<renderengine::ExternalTexture>&,
+-                              base::unique_fd&&) -> ftl::Future<FenceResult> {
++                              const std::shared_ptr<renderengine::ExternalTexture>&, const bool,
++                              base::unique_fd&&) -> ftl::future<FenceResult> {
+                     EXPECT_EQ(DEFAULT_DISPLAY_MAX_LUMINANCE, displaySettings.maxLuminance);
+                     EXPECT_EQ(Rect(DEFAULT_DISPLAY_WIDTH, DEFAULT_DISPLAY_HEIGHT),
+                               displaySettings.physicalDisplay);
+@@ -694,8 +694,8 @@ struct CommonSecureLayerProperties : public BaseLayerProperties<LayerProperties>
+         EXPECT_CALL(*test->mRenderEngine, drawLayers)
+                 .WillOnce([&](const renderengine::DisplaySettings& displaySettings,
+                               const std::vector<renderengine::LayerSettings>& layerSettings,
+-                              const std::shared_ptr<renderengine::ExternalTexture>&,
+-                              base::unique_fd&&) -> ftl::Future<FenceResult> {
++                              const std::shared_ptr<renderengine::ExternalTexture>&, const bool,
++                              base::unique_fd&&) -> ftl::future<FenceResult> {
+                     EXPECT_EQ(DEFAULT_DISPLAY_MAX_LUMINANCE, displaySettings.maxLuminance);
+                     EXPECT_EQ(Rect(DEFAULT_DISPLAY_WIDTH, DEFAULT_DISPLAY_HEIGHT),
+                               displaySettings.physicalDisplay);
+-- 
+2.51.0
+

@@ -1,0 +1,35 @@
+From 28f7a932379e631198dc4b88f4e3d37a025ac15d Mon Sep 17 00:00:00 2001
+From: Evelyn Torres <lostentrepreneur439@yahoo.com>
+Date: Sun, 1 Mar 2026 00:01:43 -0330
+Subject: [PATCH] Nuke Launcher3Quickstep Go
+
+Doesn't work properly on crDroid
+---
+ config/common_mobile.mk | 8 --------
+ 2 files changed, 4 insertions(+), 8 deletions(-)
+
+--- a/config/common_mobile.mk
++++ b/config/common_mobile.mk
+@@ -20,19 +20,11 @@ PRODUCT_PACKAGES += \
+     Glimpse \
+     LatinIME
+ 
+-ifeq ($(PRODUCT_TYPE), go)
+-PRODUCT_PACKAGES += \
+-    Launcher3QuickStepGo
+-
+-PRODUCT_DEXPREOPT_SPEED_APPS += \
+-    Launcher3QuickStepGo
+-else
+ PRODUCT_PACKAGES += \
+     Launcher3QuickStep
+ 
+ PRODUCT_DEXPREOPT_SPEED_APPS += \
+     Launcher3QuickStep
+-endif
+ 
+ PRODUCT_PACKAGES += \
+     Launcher3Overlay
+-- 
+2.51.0
+

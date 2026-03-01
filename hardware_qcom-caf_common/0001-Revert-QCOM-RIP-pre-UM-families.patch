@@ -1,0 +1,82 @@
+From cb05b791ad8c5fd247a151a66bff0b70066de2d4 Mon Sep 17 00:00:00 2001
+From: Khalvat-M <mmba313@gmail.com>
+Date: Fri, 24 Oct 2025 00:05:52 +0300
+Subject: [PATCH 1/2] Revert "QCOM: RIP pre-UM families"
+
+This reverts commit 1c39c90a8d09772d475282b066168b55f71c2f02.
+
+Change-Id: Id97dd264bb83aef09f93052f4522b2b9bff99a15
+---
+ BoardConfigQcom.mk | 32 +++++++++++++++++++++++++++++++-
+ 1 file changed, 31 insertions(+), 1 deletion(-)
+
+diff --git a/BoardConfigQcom.mk b/BoardConfigQcom.mk
+index e1cdcac..551c5c8 100644
+--- a/BoardConfigQcom.mk
++++ b/BoardConfigQcom.mk
+@@ -1,6 +1,9 @@
+ include hardware/qcom-caf/common/qcom_boards.mk
+ include hardware/qcom-caf/common/qcom_defs.mk
+ 
++B_FAMILY := msm8226 msm8610 msm8974
++B64_FAMILY := msm8992 msm8994
++BR_FAMILY := msm8909 msm8916
+ UM_3_18_HAL_FAMILY := msm8996
+ UM_4_4_HAL_FAMILY := msm8998
+ 
+@@ -271,9 +274,21 @@ else ifeq ($(TARGET_USES_YCRCB_VENUS_CAMERA_PREVIEW),true)
+     SOONG_CONFIG_qtidisplay_target_uses_ycrcb_venus_camera_preview := true
+ endif
+ 
++# UM platforms no longer need this set on O+
++ifneq ($(filter $(B_FAMILY) $(B64_FAMILY) $(BR_FAMILY),$(TARGET_BOARD_PLATFORM)),)
++    TARGET_USES_QCOM_BSP := true
++endif
++
+ # Tell HALs that we're compiling an AOSP build with an in-line kernel
+ TARGET_COMPILE_WITH_MSM_KERNEL := true
+ 
++ifneq ($(filter msm7x27a msm7x30 msm8660 msm8960,$(TARGET_BOARD_PLATFORM)),)
++    # Enable legacy audio functions
++    ifeq ($(BOARD_USES_LEGACY_ALSA_AUDIO),true)
++        USE_CUSTOM_AUDIO_POLICY := 1
++    endif
++endif
++
+ # Enable DRM PP driver on UM platforms that support it
+ ifneq ($(filter $(UM_4_9_FAMILY) $(UM_4_14_FAMILY) $(UM_4_19_FAMILY) $(UM_5_4_FAMILY) $(UM_5_10_FAMILY) $(UM_5_15_FAMILY) $(UM_6_1_FAMILY) $(UM_6_6_FAMILY),$(TARGET_BOARD_PLATFORM)),)
+     SOONG_CONFIG_qtidisplay_drmpp := true
+@@ -306,6 +321,11 @@ endif
+ 
+ TARGET_ADDITIONAL_GRALLOC_10_USAGE_BITS ?= 0
+ 
++# Mark GRALLOC_USAGE_HW_2D as valid gralloc bit on legacy platforms that support it
++ifneq ($(filter msm8960 msm8952 $(B_FAMILY) $(B64_FAMILY) $(BR_FAMILY),$(TARGET_BOARD_PLATFORM)),)
++    TARGET_ADDITIONAL_GRALLOC_10_USAGE_BITS += | (1 << 10)
++endif
++
+ # Mark GRALLOC_USAGE_EXTERNAL_DISP as valid gralloc bit
+ TARGET_ADDITIONAL_GRALLOC_10_USAGE_BITS += | (1 << 13)
+ 
+@@ -348,7 +368,17 @@ $(call soong_config_set,qtidisplay,gralloc_handle_has_custom_content_md_reserved
+ $(call soong_config_set,qtidisplay,gralloc_handle_has_reserved_size,$(TARGET_GRALLOC_HANDLE_HAS_RESERVED_SIZE))
+ $(call soong_config_set,qtidisplay,gralloc_handle_has_ubwcp_format,$(TARGET_GRALLOC_HANDLE_HAS_UBWCP_FORMAT))
+ 
+-ifneq ($(filter $(UM_3_18_HAL_FAMILY),$(TARGET_BOARD_PLATFORM)),)
++
++ifneq ($(filter $(B_FAMILY),$(TARGET_BOARD_PLATFORM)),)
++    MSM_VIDC_TARGET_LIST := $(B_FAMILY)
++    QCOM_HARDWARE_VARIANT := msm8974
++else ifneq ($(filter $(B64_FAMILY),$(TARGET_BOARD_PLATFORM)),)
++    MSM_VIDC_TARGET_LIST := $(B64_FAMILY)
++    QCOM_HARDWARE_VARIANT := msm8994
++else ifneq ($(filter $(BR_FAMILY),$(TARGET_BOARD_PLATFORM)),)
++    MSM_VIDC_TARGET_LIST := $(BR_FAMILY)
++    QCOM_HARDWARE_VARIANT := msm8916
++else ifneq ($(filter $(UM_3_18_HAL_FAMILY),$(TARGET_BOARD_PLATFORM)),)
+     QCOM_HARDWARE_VARIANT := msm8996
+ else ifneq ($(filter $(UM_4_9_LEGACY_FAMILY),$(TARGET_BOARD_PLATFORM)),)
+     QCOM_HARDWARE_VARIANT := msm8953
+-- 
+2.51.0
+

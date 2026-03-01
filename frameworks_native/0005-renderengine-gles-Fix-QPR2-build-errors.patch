@@ -1,0 +1,37 @@
+From 70f05b86a6853a2b71e7794704dfe80c4438fb15 Mon Sep 17 00:00:00 2001
+From: davigamer987 <davimarchesiprimo@gmail.com>
+Date: Mon, 20 Oct 2025 22:04:05 +0300
+Subject: [PATCH 5/7] renderengine: gles: Fix QPR2 build errors
+
+Change-Id: I0535f85380a926e59900a6359309119a806c4ef0
+---
+ libs/renderengine/gl/GLESRenderEngine.cpp | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/libs/renderengine/gl/GLESRenderEngine.cpp b/libs/renderengine/gl/GLESRenderEngine.cpp
+index 94ce273..085baf6 100644
+--- a/libs/renderengine/gl/GLESRenderEngine.cpp
++++ b/libs/renderengine/gl/GLESRenderEngine.cpp
+@@ -1110,7 +1110,7 @@ void GLESRenderEngine::drawLayersInternal(
+     std::unique_ptr<BindNativeBufferAsFramebuffer> fbo;
+     // Gathering layers that requested blur, we'll need them to decide when to render to an
+     // offscreen buffer, and when to render to the native buffer.
+-    std::deque<const LayerSettings> blurLayers;
++    std::deque<LayerSettings> blurLayers;
+     if (CC_LIKELY(mBlurFilter != nullptr)) {
+         for (const auto& layer : layers) {
+             if (layer.backgroundBlurRadius > 0) {
+@@ -1168,7 +1168,9 @@ void GLESRenderEngine::drawLayersInternal(
+                         .setCropCoords(2 /* size */)
+                         .build();
+     for (const auto& layer : layers) {
+-        if (blurLayers.size() > 0 && blurLayers.front() == layer) {
++        if (blurLayers.size() > 0 && 
++            // Compare the relevant fields instead of using operator== to avoid const issues
++            blurLayers.front().backgroundBlurRadius == layer.backgroundBlurRadius) {
+             blurLayers.pop_front();
+ 
+             auto status = mBlurFilter->prepare();
+-- 
+2.51.0
+
