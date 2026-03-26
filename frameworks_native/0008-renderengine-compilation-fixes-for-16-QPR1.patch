@@ -1,0 +1,77 @@
+From 3e89964a88ea5192acc8db45d796528864dfb6f7 Mon Sep 17 00:00:00 2001
+From: Yaroslav Zviezda <acroreiser@gmail.com>
+Date: Sun, 22 Mar 2026 15:35:37 -0400
+Subject: [PATCH 8/8] renderengine: compilation fixes for 16 QPR1
+
+Change-Id: I09543b85e637cfe8fe64a704f0e381ba57f2334b
+---
+ libs/renderengine/skia/Cache.cpp              | 4 ++--
+ libs/renderengine/skia/SkiaGLRenderEngine.cpp | 2 +-
+ services/surfaceflinger/SurfaceFlinger.cpp    | 2 +-
+ services/surfaceflinger/SurfaceFlinger.h      | 2 +-
+ 4 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/libs/renderengine/skia/Cache.cpp b/libs/renderengine/skia/Cache.cpp
+index cb1c8e2..511fa39 100644
+--- a/libs/renderengine/skia/Cache.cpp
++++ b/libs/renderengine/skia/Cache.cpp
+@@ -691,7 +691,7 @@ static void drawExtendedHDRFilteredImageLayers(SkiaRenderEngine* renderengine, c
+                 layer.whitePointNits = layerWhitePoint;
+                 layers.push_back(layer);
+             }
+-            renderengine->drawLayers(display, layers, dstTexture, base::unique_fd());
++            renderengine->drawLayers(display, layers, dstTexture, false, base::unique_fd());
+         }
+     }
+ }
+@@ -748,7 +748,7 @@ static void drawExtendedHDRFilteredImageShadowLayers(SkiaRenderEngine* rendereng
+                 layer.whitePointNits = layerWhitePoint;
+ 
+                 auto layers = std::vector<LayerSettings>{layer, caster};
+-                renderengine->drawLayers(display, layers, dstTexture, base::unique_fd());
++                renderengine->drawLayers(display, layers, dstTexture, false, base::unique_fd());
+             }
+         }
+     }
+diff --git a/libs/renderengine/skia/SkiaGLRenderEngine.cpp b/libs/renderengine/skia/SkiaGLRenderEngine.cpp
+index dc8ac93..bb371ae 100644
+--- a/libs/renderengine/skia/SkiaGLRenderEngine.cpp
++++ b/libs/renderengine/skia/SkiaGLRenderEngine.cpp
+@@ -308,7 +308,7 @@ SkiaRenderEngine::Contexts SkiaGLRenderEngine::createContexts() {
+ bool SkiaGLRenderEngine::supportsForwardPixelKill() const {
+     // ARM gpu support this since 2013
+     constexpr std::string kArm = "ARM";
+-    return GLExtensions::getInstance().getVendor() == kArm;
++    return gl::GLExtensions::getInstance().getVendor() == kArm;
+ }
+ bool SkiaGLRenderEngine::supportsProtectedContentImpl() const {
+     return mProtectedEGLContext != EGL_NO_CONTEXT;
+diff --git a/services/surfaceflinger/SurfaceFlinger.cpp b/services/surfaceflinger/SurfaceFlinger.cpp
+index 1438373..f1401ba 100644
+--- a/services/surfaceflinger/SurfaceFlinger.cpp
++++ b/services/surfaceflinger/SurfaceFlinger.cpp
+@@ -5742,7 +5742,7 @@ status_t SurfaceFlinger::createLayer(LayerCreationArgs& args, gui::CreateSurface
+     return result;
+ }
+ 
+-status_t SurfaceFlinger::createLayer(const LayerCreationArgs& args, sp<IBinder>* handle,
++status_t SurfaceFlinger::createLayer(LayerCreationArgs& args, sp<IBinder>* handle,
+                                      sp<Layer>* outLayer) {
+     if (checkLayerLeaks() != NO_ERROR) {
+         return NO_MEMORY;
+diff --git a/services/surfaceflinger/SurfaceFlinger.h b/services/surfaceflinger/SurfaceFlinger.h
+index e44ace0..a432e84 100644
+--- a/services/surfaceflinger/SurfaceFlinger.h
++++ b/services/surfaceflinger/SurfaceFlinger.h
+@@ -861,7 +861,7 @@ private:
+      */
+     status_t createLayer(LayerCreationArgs& args, gui::CreateSurfaceResult& outResult);
+ 
+-    status_t createLayer(const LayerCreationArgs& args, sp<IBinder>* outHandle,
++    status_t createLayer(LayerCreationArgs& args, sp<IBinder>* outHandle,
+                          sp<Layer>* outLayer);
+ 
+     // Checks if there are layer leaks before creating layer
+-- 
+2.53.0
+

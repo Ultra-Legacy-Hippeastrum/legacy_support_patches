@@ -1,7 +1,7 @@
-From 552218a6cf7713fa98d4100625e1e392b9da5e71 Mon Sep 17 00:00:00 2001
+From 275c6517b0b727d00213311867dcd000dcd32c5e Mon Sep 17 00:00:00 2001
 From: Roman Stratiienko <r.stratiienko@gmail.com>
 Date: Thu, 9 Jun 2022 20:44:54 +0300
-Subject: [PATCH 3/4] Don't use stretch effect by default
+Subject: [PATCH 3/6] Don't use stretch effect by default
 
 Old SOCs simply can't handle it and FPS is dropped down to 10.
 
@@ -31,5 +31,5 @@ index c110ab956..0352da3a0 100644
  
          mPaint.setAntiAlias(true);
 -- 
-2.51.0
+2.53.0
 

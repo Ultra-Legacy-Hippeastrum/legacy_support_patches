@@ -1,7 +1,7 @@
-From fb104e78e77a073aa87fd664a32e16f289169584 Mon Sep 17 00:00:00 2001
+From 531908ca2c57cf9236d19779fa2f456da59645b4 Mon Sep 17 00:00:00 2001
 From: Yaroslav Zviezda <acroreiser@gmail.com>
 Date: Fri, 21 Oct 2022 19:31:55 +0300
-Subject: [PATCH 7/7] libbinder: make threadpool shrinking non-fatal
+Subject: [PATCH 7/8] libbinder: make threadpool shrinking non-fatal
 
 Change-Id: Ic5c5ecc4c38d5f625e4c26b7202315df7440e396
 ---
@@ -9,10 +9,10 @@ Change-Id: Ic5c5ecc4c38d5f625e4c26b7202315df7440e396
  1 file changed, 2 insertions(+), 2 deletions(-)
 
 diff --git a/libs/binder/ProcessState.cpp b/libs/binder/ProcessState.cpp
-index 0bec379..f447bc4 100644
+index c4a54c9..c4ba5ac 100644
 --- a/libs/binder/ProcessState.cpp
 +++ b/libs/binder/ProcessState.cpp
-@@ -443,8 +443,8 @@ void ProcessState::spawnPooledThread(bool isMain)
+@@ -449,8 +449,8 @@ void ProcessState::spawnPooledThread(bool isMain)
  }
  
  status_t ProcessState::setThreadPoolMaxThreadCount(size_t maxThreads) {
@@ -24,5 +24,5 @@ index 0bec379..f447bc4 100644
      if (ioctl(mDriverFD, BINDER_SET_MAX_THREADS, &maxThreads) != -1) {
          mMaxThreads = maxThreads;
 -- 
-2.51.0
+2.53.0
 

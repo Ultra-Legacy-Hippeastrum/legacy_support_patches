@@ -1,0 +1,26 @@
+From 0430a68613e8c28b2cf54f36d68b1ca115d5643b Mon Sep 17 00:00:00 2001
+From: Yaroslav Zviezda <acroreiser@gmail.com>
+Date: Sat, 21 Mar 2026 09:45:18 -0400
+Subject: [PATCH 1/3] Revert "Launcher3: ModelCallbacks: Remove screen id
+ filter"
+
+This reverts commit a85b720624ea869e6e02280380f22d566aa92bc8.
+---
+ src/com/android/launcher3/ModelCallbacks.kt | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/src/com/android/launcher3/ModelCallbacks.kt b/src/com/android/launcher3/ModelCallbacks.kt
+index ba5c0db..c326486 100644
+--- a/src/com/android/launcher3/ModelCallbacks.kt
++++ b/src/com/android/launcher3/ModelCallbacks.kt
+@@ -360,7 +360,6 @@ class ModelCallbacks(private var launcher: Launcher) : BgDataModel.Callbacks {
+             }
+         }
+         orderedScreenIds
+-            .filter { screenId -> screenId != FIRST_SCREEN_ID }
+             .forEach { screenId ->
+                 launcher.workspace.insertNewWorkspaceScreenBeforeEmptyScreen(screenId)
+             }
+-- 
+2.53.0
+

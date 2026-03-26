@@ -1,7 +1,7 @@
-From 2776a94809cf7102c4a4cb410ed2db69ded97030 Mon Sep 17 00:00:00 2001
+From 722f98a83cd778a862897df285215b2e7f3dd94b Mon Sep 17 00:00:00 2001
 From: Yaroslav Zviezda <acroreiser@gmail.com>
 Date: Mon, 20 Oct 2025 22:00:37 +0300
-Subject: [PATCH 2/7] Revert "Remove useFramebufferCache parameter in
+Subject: [PATCH 2/8] Revert "Remove useFramebufferCache parameter in
  drawLayers()" and fix new code
 
 This reverts commit f29700fb05dd225dc5b80dac5e4d80e074622e09.
@@ -148,7 +148,7 @@ index 0f98822..a71b759 100644
      MOCK_METHOD0(getContextPriority, int());
      MOCK_METHOD0(supportsBackgroundBlur, bool());
 diff --git a/libs/renderengine/skia/Cache.cpp b/libs/renderengine/skia/Cache.cpp
-index f43694e..7221950 100644
+index 493b7e0..09c37dc 100644
 --- a/libs/renderengine/skia/Cache.cpp
 +++ b/libs/renderengine/skia/Cache.cpp
 @@ -36,6 +36,8 @@
@@ -300,7 +300,7 @@ index f43694e..7221950 100644
      }
  }
  
-@@ -852,7 +859,7 @@ void Cache::primeShaderCache(SkiaRenderEngine* renderengine, PrimeCacheConfig co
+@@ -962,7 +969,7 @@ void Cache::primeShaderCache(SkiaRenderEngine* renderengine, PrimeCacheConfig co
          // call get() to make it synchronous
          {
              SFTRACE_NAME("finalLayer");
@@ -310,10 +310,10 @@ index f43694e..7221950 100644
  
          const nsecs_t timeAfter = systemTime();
 diff --git a/libs/renderengine/skia/SkiaRenderEngine.cpp b/libs/renderengine/skia/SkiaRenderEngine.cpp
-index 5b6edb4..c28ffd2 100644
+index 0938255..6479a8b 100644
 --- a/libs/renderengine/skia/SkiaRenderEngine.cpp
 +++ b/libs/renderengine/skia/SkiaRenderEngine.cpp
-@@ -735,7 +735,8 @@ private:
+@@ -729,7 +729,8 @@ private:
  void SkiaRenderEngine::drawLayersInternal(
          const std::shared_ptr<std::promise<FenceResult>>&& resultPromise,
          const DisplaySettings& display, const std::vector<LayerSettings>& layers,
@@ -324,10 +324,10 @@ index 5b6edb4..c28ffd2 100644
  
      std::lock_guard<std::mutex> lock(mRenderingMutex);
 diff --git a/libs/renderengine/skia/SkiaRenderEngine.h b/libs/renderengine/skia/SkiaRenderEngine.h
-index 759a132..5071aec 100644
+index 3c82ff5..269a5f0 100644
 --- a/libs/renderengine/skia/SkiaRenderEngine.h
 +++ b/libs/renderengine/skia/SkiaRenderEngine.h
-@@ -144,6 +144,7 @@ private:
+@@ -154,6 +154,7 @@ private:
                              const DisplaySettings& display,
                              const std::vector<LayerSettings>& layers,
                              const std::shared_ptr<ExternalTexture>& buffer,
@@ -336,10 +336,10 @@ index 759a132..5071aec 100644
      void tonemapAndDrawGainmapInternal(
              const std::shared_ptr<std::promise<FenceResult>>&& resultPromise,
 diff --git a/libs/renderengine/tests/RenderEngineTest.cpp b/libs/renderengine/tests/RenderEngineTest.cpp
-index 3b3f259..1e8f53a 100644
+index a0ff9b5..c9cdcae 100644
 --- a/libs/renderengine/tests/RenderEngineTest.cpp
 +++ b/libs/renderengine/tests/RenderEngineTest.cpp
-@@ -508,7 +508,7 @@ public:
+@@ -468,7 +468,7 @@ public:
      void invokeDraw(const renderengine::DisplaySettings& settings,
                      const std::vector<renderengine::LayerSettings>& layers) {
          ftl::Future<FenceResult> future =
@@ -348,7 +348,7 @@ index 3b3f259..1e8f53a 100644
          ASSERT_TRUE(future.valid());
  
          auto result = future.get();
-@@ -1655,7 +1655,8 @@ TEST_P(RenderEngineTest, drawLayers_nullOutputBuffer) {
+@@ -1490,7 +1490,8 @@ TEST_P(RenderEngineTest, drawLayers_nullOutputBuffer) {
      layer.geometry.boundaries = fullscreenRect().toFloatRect();
      BufferSourceVariant<ForceOpaqueBufferVariant>::fillColor(layer, 1.0f, 0.0f, 0.0f, this);
      layers.push_back(layer);
@@ -358,7 +358,7 @@ index 3b3f259..1e8f53a 100644
  
      ASSERT_TRUE(future.valid());
      auto result = future.get();
-@@ -2301,14 +2302,14 @@ TEST_P(RenderEngineTest, cleanupPostRender_cleansUpOnce) {
+@@ -2136,14 +2137,14 @@ TEST_P(RenderEngineTest, cleanupPostRender_cleansUpOnce) {
      layers.push_back(layer);
  
      ftl::Future<FenceResult> futureOne =
@@ -478,10 +478,10 @@ index 911a5c9..1ce3ebc 100644
              const std::shared_ptr<std::promise<FenceResult>>&& resultPromise,
              const std::shared_ptr<ExternalTexture>& hdr, base::borrowed_fd&& hdrFence,
 diff --git a/services/surfaceflinger/CompositionEngine/src/Output.cpp b/services/surfaceflinger/CompositionEngine/src/Output.cpp
-index 92f41cb..8fee18c 100644
+index 615bb09..3a39a93 100644
 --- a/services/surfaceflinger/CompositionEngine/src/Output.cpp
 +++ b/services/surfaceflinger/CompositionEngine/src/Output.cpp
-@@ -1435,9 +1435,17 @@ std::optional<base::unique_fd> Output::composeSurfaces(
+@@ -1453,9 +1453,17 @@ std::optional<base::unique_fd> Output::composeSurfaces(
                     });
  
      const nsecs_t renderEngineStart = systemTime();
@@ -518,10 +518,10 @@ index a458b5e..4515101 100644
  
      if (fenceStatus(fenceResult) == NO_ERROR) {
 diff --git a/services/surfaceflinger/CompositionEngine/tests/OutputTest.cpp b/services/surfaceflinger/CompositionEngine/tests/OutputTest.cpp
-index 590626a..61fbbb0 100644
+index a763a9e..a3aba4c 100644
 --- a/services/surfaceflinger/CompositionEngine/tests/OutputTest.cpp
 +++ b/services/surfaceflinger/CompositionEngine/tests/OutputTest.cpp
-@@ -3638,10 +3638,10 @@ TEST_F(OutputComposeSurfacesTest, handlesZeroCompositionRequests) {
+@@ -3644,10 +3644,10 @@ TEST_F(OutputComposeSurfacesTest, handlesZeroCompositionRequests) {
              .WillRepeatedly(Return());
  
      EXPECT_CALL(*mRenderSurface, dequeueBuffer(_)).WillRepeatedly(Return(mOutputBuffer));
@@ -534,7 +534,7 @@ index 590626a..61fbbb0 100644
                                  base::unique_fd&&) -> ftl::Future<FenceResult> {
                  return ftl::yield<FenceResult>(Fence::NO_FENCE);
              });
-@@ -3669,10 +3669,10 @@ TEST_F(OutputComposeSurfacesTest, buildsAndRendersRequestList) {
+@@ -3675,10 +3675,10 @@ TEST_F(OutputComposeSurfacesTest, buildsAndRendersRequestList) {
                      }));
  
      EXPECT_CALL(*mRenderSurface, dequeueBuffer(_)).WillRepeatedly(Return(mOutputBuffer));
@@ -547,7 +547,7 @@ index 590626a..61fbbb0 100644
                                  base::unique_fd&&) -> ftl::Future<FenceResult> {
                  return ftl::yield<FenceResult>(Fence::NO_FENCE);
              });
-@@ -3703,10 +3703,10 @@ TEST_F(OutputComposeSurfacesTest,
+@@ -3709,10 +3709,10 @@ TEST_F(OutputComposeSurfacesTest,
                      }));
  
      EXPECT_CALL(*mRenderSurface, dequeueBuffer(_)).WillRepeatedly(Return(mOutputBuffer));
@@ -560,7 +560,7 @@ index 590626a..61fbbb0 100644
                                  base::unique_fd&&) -> ftl::Future<FenceResult> {
                  return ftl::yield<FenceResult>(Fence::NO_FENCE);
              });
-@@ -3732,7 +3732,7 @@ TEST_F(OutputComposeSurfacesTest, renderDuplicateClientCompositionRequestsWithou
+@@ -3738,7 +3738,7 @@ TEST_F(OutputComposeSurfacesTest, renderDuplicateClientCompositionRequestsWithou
              .WillRepeatedly(Return());
  
      EXPECT_CALL(*mRenderSurface, dequeueBuffer(_)).WillRepeatedly(Return(mOutputBuffer));
@@ -569,7 +569,7 @@ index 590626a..61fbbb0 100644
              .Times(2)
              .WillOnce(Return(ByMove(ftl::yield<FenceResult>(Fence::NO_FENCE))))
              .WillOnce(Return(ByMove(ftl::yield<FenceResult>(Fence::NO_FENCE))));
-@@ -3762,7 +3762,7 @@ TEST_F(OutputComposeSurfacesTest, skipDuplicateClientCompositionRequests) {
+@@ -3768,7 +3768,7 @@ TEST_F(OutputComposeSurfacesTest, skipDuplicateClientCompositionRequests) {
              .WillRepeatedly(Return());
  
      EXPECT_CALL(*mRenderSurface, dequeueBuffer(_)).WillRepeatedly(Return(mOutputBuffer));
@@ -578,7 +578,7 @@ index 590626a..61fbbb0 100644
              .WillOnce(Return(ByMove(ftl::yield<FenceResult>(Fence::NO_FENCE))));
      EXPECT_CALL(mOutput, setExpensiveRenderingExpected(false));
  
-@@ -3846,10 +3846,10 @@ TEST_F(OutputComposeSurfacesTest, clientCompositionIfBufferChanges) {
+@@ -3852,10 +3852,10 @@ TEST_F(OutputComposeSurfacesTest, clientCompositionIfBufferChanges) {
              .WillOnce(Return(mOutputBuffer))
              .WillOnce(Return(otherOutputBuffer));
      base::unique_fd fd(open("/dev/null", O_RDONLY));
@@ -591,7 +591,7 @@ index 590626a..61fbbb0 100644
                                  base::unique_fd&&) -> ftl::Future<FenceResult> {
                  return ftl::yield<FenceResult>(sp<Fence>::make(std::move(fd)));
              });
-@@ -3884,9 +3884,9 @@ TEST_F(OutputComposeSurfacesTest, clientCompositionIfRequestChanges) {
+@@ -3890,9 +3890,9 @@ TEST_F(OutputComposeSurfacesTest, clientCompositionIfRequestChanges) {
              .WillRepeatedly(Return());
  
      EXPECT_CALL(*mRenderSurface, dequeueBuffer(_)).WillRepeatedly(Return(mOutputBuffer));
@@ -603,7 +603,7 @@ index 590626a..61fbbb0 100644
              .WillOnce(Return(ByMove(ftl::yield<FenceResult>(Fence::NO_FENCE))));
  
      verify().execute().expectAFenceWasReturned();
-@@ -4000,7 +4000,7 @@ struct OutputComposeSurfacesTest_UsesExpectedDisplaySettings : public OutputComp
+@@ -4006,7 +4006,7 @@ struct OutputComposeSurfacesTest_UsesExpectedDisplaySettings : public OutputComp
      struct ExpectDisplaySettingsState
            : public CallOrderStateMachineHelper<TestType, ExpectDisplaySettingsState> {
          auto thenExpectDisplaySettingsUsed(renderengine::DisplaySettings settings) {
@@ -612,7 +612,7 @@ index 590626a..61fbbb0 100644
                      .WillOnce(Return(ByMove(ftl::yield<FenceResult>(Fence::NO_FENCE))));
              return nextState<ExecuteState>();
          }
-@@ -4309,11 +4309,11 @@ struct OutputComposeSurfacesTest_HandlesProtectedContent : public OutputComposeS
+@@ -4315,11 +4315,11 @@ struct OutputComposeSurfacesTest_HandlesProtectedContent : public OutputComposeS
          EXPECT_CALL(mOutput, appendRegionFlashRequests(RegionEq(kDebugRegion), _))
                  .WillRepeatedly(Return());
          EXPECT_CALL(*mRenderSurface, dequeueBuffer(_)).WillRepeatedly(Return(mOutputBuffer));
@@ -626,7 +626,7 @@ index 590626a..61fbbb0 100644
                      return ftl::yield<FenceResult>(Fence::NO_FENCE);
                  });
      }
-@@ -4358,7 +4358,7 @@ TEST_F(OutputComposeSurfacesTest_HandlesProtectedContent, ifNotEnabled) {
+@@ -4356,7 +4356,7 @@ TEST_F(OutputComposeSurfacesTest_HandlesProtectedContent, ifNotEnabled) {
      EXPECT_CALL(*mRenderSurface, setProtected(true));
      // Must happen after setting the protected content state.
      EXPECT_CALL(*mRenderSurface, dequeueBuffer(_)).WillRepeatedly(Return(mOutputBuffer));
@@ -635,7 +635,7 @@ index 590626a..61fbbb0 100644
              .WillOnce(Return(ByMove(ftl::yield<FenceResult>(Fence::NO_FENCE))));
  
      base::unique_fd fd;
-@@ -4427,7 +4427,7 @@ TEST_F(OutputComposeSurfacesTest_SetsExpensiveRendering, IfExepensiveOutputDatas
+@@ -4417,7 +4417,7 @@ TEST_F(OutputComposeSurfacesTest_SetsExpensiveRendering, IfExepensiveOutputDatas
      InSequence seq;
  
      EXPECT_CALL(mOutput, setExpensiveRenderingExpected(true));
@@ -1102,10 +1102,10 @@ index 54ee0ef..9cd6db7 100644
      EXPECT_NE(getNonBufferHash(layers),
                mFlattener->flattenLayers(layers, getNonBufferHash(layers), mTime));
 diff --git a/services/surfaceflinger/tests/unittests/CompositionTest.cpp b/services/surfaceflinger/tests/unittests/CompositionTest.cpp
-index c53b5d4..b4ab6ce 100644
+index 83a9053..07d3a12 100644
 --- a/services/surfaceflinger/tests/unittests/CompositionTest.cpp
 +++ b/services/surfaceflinger/tests/unittests/CompositionTest.cpp
-@@ -317,7 +317,7 @@ struct BaseDisplayVariant {
+@@ -316,7 +316,7 @@ struct BaseDisplayVariant {
                  .WillRepeatedly([&](const renderengine::DisplaySettings& displaySettings,
                                      const std::vector<renderengine::LayerSettings>&,
                                      const std::shared_ptr<renderengine::ExternalTexture>&,
@@ -1114,7 +1114,7 @@ index c53b5d4..b4ab6ce 100644
                      EXPECT_EQ(DEFAULT_DISPLAY_MAX_LUMINANCE, displaySettings.maxLuminance);
                      EXPECT_EQ(Rect(DEFAULT_DISPLAY_WIDTH, DEFAULT_DISPLAY_HEIGHT),
                                displaySettings.physicalDisplay);
-@@ -368,7 +368,7 @@ struct BaseDisplayVariant {
+@@ -367,7 +367,7 @@ struct BaseDisplayVariant {
                  .WillRepeatedly([&](const renderengine::DisplaySettings& displaySettings,
                                      const std::vector<renderengine::LayerSettings>&,
                                      const std::shared_ptr<renderengine::ExternalTexture>&,
@@ -1123,7 +1123,7 @@ index c53b5d4..b4ab6ce 100644
                      EXPECT_EQ(DEFAULT_DISPLAY_MAX_LUMINANCE, displaySettings.maxLuminance);
                      EXPECT_EQ(Rect(DEFAULT_DISPLAY_WIDTH, DEFAULT_DISPLAY_HEIGHT),
                                displaySettings.physicalDisplay);
-@@ -561,8 +561,8 @@ struct BaseLayerProperties {
+@@ -560,8 +560,8 @@ struct BaseLayerProperties {
          EXPECT_CALL(*test->mRenderEngine, drawLayers)
                  .WillOnce([&](const renderengine::DisplaySettings& displaySettings,
                                const std::vector<renderengine::LayerSettings>& layerSettings,
@@ -1134,7 +1134,7 @@ index c53b5d4..b4ab6ce 100644
                      EXPECT_EQ(DEFAULT_DISPLAY_MAX_LUMINANCE, displaySettings.maxLuminance);
                      EXPECT_EQ(Rect(DEFAULT_DISPLAY_WIDTH, DEFAULT_DISPLAY_HEIGHT),
                                displaySettings.physicalDisplay);
-@@ -612,8 +612,8 @@ struct BaseLayerProperties {
+@@ -611,8 +611,8 @@ struct BaseLayerProperties {
          EXPECT_CALL(*test->mRenderEngine, drawLayers)
                  .WillOnce([&](const renderengine::DisplaySettings& displaySettings,
                                const std::vector<renderengine::LayerSettings>& layerSettings,
@@ -1145,7 +1145,7 @@ index c53b5d4..b4ab6ce 100644
                      EXPECT_EQ(DEFAULT_DISPLAY_MAX_LUMINANCE, displaySettings.maxLuminance);
                      EXPECT_EQ(Rect(DEFAULT_DISPLAY_WIDTH, DEFAULT_DISPLAY_HEIGHT),
                                displaySettings.physicalDisplay);
-@@ -694,8 +694,8 @@ struct CommonSecureLayerProperties : public BaseLayerProperties<LayerProperties>
+@@ -693,8 +693,8 @@ struct CommonSecureLayerProperties : public BaseLayerProperties<LayerProperties>
          EXPECT_CALL(*test->mRenderEngine, drawLayers)
                  .WillOnce([&](const renderengine::DisplaySettings& displaySettings,
                                const std::vector<renderengine::LayerSettings>& layerSettings,
@@ -1157,5 +1157,5 @@ index c53b5d4..b4ab6ce 100644
                      EXPECT_EQ(Rect(DEFAULT_DISPLAY_WIDTH, DEFAULT_DISPLAY_HEIGHT),
                                displaySettings.physicalDisplay);
 -- 
-2.51.0
+2.53.0
 

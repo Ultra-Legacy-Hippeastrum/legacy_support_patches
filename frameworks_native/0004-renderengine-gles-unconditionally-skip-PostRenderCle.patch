@@ -1,7 +1,7 @@
-From 270eaef1b3a03e769664e63082e9e221dc3ee5fc Mon Sep 17 00:00:00 2001
+From f4db7da1ffb8c70c6e2e5b6f44a1df21c83e1505 Mon Sep 17 00:00:00 2001
 From: Yaroslav Zviezda <acroreiser@gmail.com>
 Date: Mon, 20 Oct 2025 22:02:31 +0300
-Subject: [PATCH 4/7] renderengine: gles: unconditionally skip
+Subject: [PATCH 4/8] renderengine: gles: unconditionally skip
  PostRenderCleanup
 
 Ultra-legacy targets works better without this.
@@ -32,5 +32,5 @@ index 393e011..94ce273 100644
  
  void GLESRenderEngine::cleanupPostRender() {
 -- 
-2.51.0
+2.53.0
 

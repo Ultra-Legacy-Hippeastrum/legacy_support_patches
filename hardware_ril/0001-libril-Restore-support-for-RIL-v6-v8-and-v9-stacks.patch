@@ -1,4 +1,4 @@
-From cf14a46e181aa53ba59887f0b09e70cd9685a850 Mon Sep 17 00:00:00 2001
+From 5ad3c8dd0d3812e6ab286c586c6815b562731794 Mon Sep 17 00:00:00 2001
 From: Adrian DC <radian.dc@gmail.com>
 Date: Sun, 23 Apr 2017 21:28:36 +0200
 Subject: [PATCH] libril: Restore support for RIL v6, v8 and v9 stacks
@@ -235,5 +235,5 @@ index 1d64bb0..54d5846 100755
              return 0;
          }
 -- 
-2.51.0
+2.53.0
 

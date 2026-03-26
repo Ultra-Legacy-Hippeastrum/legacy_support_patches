@@ -1,4 +1,4 @@
-From cb05b791ad8c5fd247a151a66bff0b70066de2d4 Mon Sep 17 00:00:00 2001
+From 157852de80c60f1e9bebe3b6a3717e42d90f24c0 Mon Sep 17 00:00:00 2001
 From: Khalvat-M <mmba313@gmail.com>
 Date: Fri, 24 Oct 2025 00:05:52 +0300
 Subject: [PATCH 1/2] Revert "QCOM: RIP pre-UM families"
@@ -78,5 +78,5 @@ index e1cdcac..551c5c8 100644
  else ifneq ($(filter $(UM_4_9_LEGACY_FAMILY),$(TARGET_BOARD_PLATFORM)),)
      QCOM_HARDWARE_VARIANT := msm8953
 -- 
-2.51.0
+2.53.0
 

@@ -1,4 +1,4 @@
-From 885f5c46b04a569213adeafe2248c0ac1b33387b Mon Sep 17 00:00:00 2001
+From b89d9af7a016af705d50a2d77b230acb1e303017 Mon Sep 17 00:00:00 2001
 From: Yaroslav Zviezda <acroreiser@gmail.com>
 Date: Wed, 29 Dec 2021 11:41:03 +0300
 Subject: [PATCH] sepolicy: allow su domain in user builds Do not use for
@@ -20,14 +20,16 @@ Change-Id: I3ac61e9e3e9741d512ece95c86a8e7ee1617a926
  prebuilts/api/33.0/private/init.te   | 10 +++++-----
  prebuilts/api/33.0/private/su.te     |  3 ---
  prebuilts/api/34.0/private/init.te   | 10 +++++-----
+ prebuilts/api/34.0/private/su.te     |  2 --
  private/init.te                      | 10 +++++-----
- 15 files changed, 39 insertions(+), 54 deletions(-)
+ private/su.te                        |  2 --
+ 17 files changed, 39 insertions(+), 58 deletions(-)
 
 diff --git a/build/soong/policy.go b/build/soong/policy.go
-index 7e60832..31dc41b 100644
+index 1053edf..a09475e 100644
 --- a/build/soong/policy.go
 +++ b/build/soong/policy.go
-@@ -537,7 +537,7 @@ func (c *policyBinary) GenerateAndroidBuildActions(ctx android.ModuleContext) {
+@@ -556,7 +556,7 @@ func (c *policyBinary) GenerateAndroidBuildActions(ctx android.ModuleContext) {
  		rule.Temporary(permissiveDomains)
  
  		msg := `==========\n` +
@@ -36,7 +38,7 @@ index 7e60832..31dc41b 100644
  			`List of invalid domains:`
  
  		rule.Command().Text("if test").
-@@ -547,7 +547,7 @@ func (c *policyBinary) GenerateAndroidBuildActions(ctx android.ModuleContext) {
+@@ -566,7 +566,7 @@ func (c *policyBinary) GenerateAndroidBuildActions(ctx android.ModuleContext) {
  			Text(`"` + msg + `"`).
  			Text("&& cat ").
  			Input(permissiveDomains).
@@ -289,8 +291,27 @@ index 9d3a2c3..f34d166 100644
  # Allow init to figure out name of dm-device from it's /dev/block/dm-XX path.
  # This is useful in case of remounting ext4 userdata into checkpointing mode,
  # since it potentially requires tearing down dm-devices (e.g. dm-bow, dm-crypto)
+diff --git a/prebuilts/api/34.0/private/su.te b/prebuilts/api/34.0/private/su.te
+index bac0ae0..fcb9822 100644
+--- a/prebuilts/api/34.0/private/su.te
++++ b/prebuilts/api/34.0/private/su.te
+@@ -1,6 +1,5 @@
+ typeattribute su coredomain;
+ 
+-userdebug_or_eng(`
+   domain_auto_trans(shell, su_exec, su)
+   # Allow dumpstate to call su on userdebug / eng builds to collect
+   # additional information.
+@@ -29,7 +28,6 @@ userdebug_or_eng(`
+ 
+   # Allow root to set MTE permissive mode.
+   set_prop(su, permissive_mte_prop);
+-')
+ 
+ # su is also permissive to permit setenforce.
+ permissive su;
 diff --git a/private/init.te b/private/init.te
-index 7f4585d..7d87cfb 100644
+index 91ea3e9..a1b4480 100644
 --- a/private/init.te
 +++ b/private/init.te
 @@ -28,13 +28,13 @@ domain_trans(init, { rootfs toolbox_exec }, modprobe)
@@ -312,6 +333,25 @@ index 7f4585d..7d87cfb 100644
  # Allow init to figure out name of dm-device from it's /dev/block/dm-XX path.
  # This is useful in case of remounting ext4 userdata into checkpointing mode,
  # since it potentially requires tearing down dm-devices (e.g. dm-bow, dm-crypto)
+diff --git a/private/su.te b/private/su.te
+index 690f305..7902dbf 100644
+--- a/private/su.te
++++ b/private/su.te
+@@ -1,6 +1,5 @@
+ typeattribute su coredomain;
+ 
+-userdebug_or_eng(`
+   domain_auto_trans(shell, su_exec, su)
+   # Allow dumpstate to call su on userdebug / eng builds to collect
+   # additional information.
+@@ -131,7 +130,6 @@ userdebug_or_eng(`
+   typeattribute su hal_wifi_client;
+   typeattribute su hal_wifi_hostapd_client;
+   typeattribute su hal_wifi_supplicant_client;
+-')
+ 
+ # su is also permissive to permit setenforce.
+ permissive su;
 -- 
-2.51.0
+2.53.0
 

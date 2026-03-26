@@ -1,0 +1,20 @@
+From cd8ea3c343bd4822564c943cd5c50f404ba0c1f4 Mon Sep 17 00:00:00 2001
+From: Evelyn Torres <lostentrepreneur439@yahoo.com>
+Date: Thu, 26 Mar 2026 08:06:58 -0230
+Subject: [PATCH] remove hal_soter Causes build errors on Nexus 5
+
+---
+ qcom/private/platform_app.te | 1 -
+ 1 file changed, 1 deletion(-)
+ delete mode 100644 qcom/private/platform_app.te
+
+diff --git a/qcom/private/platform_app.te b/qcom/private/platform_app.te
+deleted file mode 100644
+index 87bd5c6..0000000
+--- a/qcom/private/platform_app.te
++++ /dev/null
+@@ -1 +0,0 @@
+-hal_client_domain(platform_app, vendor_hal_soter)
+-- 
+2.53.0
+

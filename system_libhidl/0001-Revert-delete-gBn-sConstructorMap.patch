@@ -1,35 +1,39 @@
-From 3515e03af2f8a929e3c73bc8e1d09bee10213723 Mon Sep 17 00:00:00 2001
-From: anrui2032 <anrui2032@gmail.com>
-Date: Wed, 24 Aug 2022 04:24:28 +0000
+From 62c60d4f898cb91baa4883b7dd5fa6283b998f62 Mon Sep 17 00:00:00 2001
+From: Giovanni Ricca <giovanniricca@proton.me>
+Date: Wed, 17 Aug 2022 21:36:43 +0200
 Subject: [PATCH] Revert "delete gBn/sConstructorMap"
 
- * Legacy (msm8998/sdm660) device blobs need this static variable
+* We stil need it for legacy blobs
 
 This reverts commit e29b2ad2157639fd466644154cde7673b052fa8d.
 
-Change-Id: Ib67da54866d21bd7fc260b5fddcff4df1f05e971
+Change-Id: If689959309410d7062f8dc58234c802c2674b420
 ---
- transport/HidlBinderSupport.cpp      | 4 ++++
+ transport/HidlBinderSupport.cpp      | 8 ++++++--
  transport/HidlPassthroughSupport.cpp | 4 ++++
  transport/InternalStatic.h           | 7 +++++++
  transport/Static.cpp                 | 8 ++++++++
- 4 files changed, 23 insertions(+)
+ 4 files changed, 25 insertions(+), 2 deletions(-)
 
 diff --git a/transport/HidlBinderSupport.cpp b/transport/HidlBinderSupport.cpp
-index 8b36f1f..6e3038c 100644
+index 8b36f1f..b48b460 100644
 --- a/transport/HidlBinderSupport.cpp
 +++ b/transport/HidlBinderSupport.cpp
-@@ -254,6 +254,10 @@ sp<IBinder> getOrCreateCachedBinder(::android::hidl::base::V1_0::IBase* ifacePtr
+@@ -254,8 +254,12 @@ sp<IBinder> getOrCreateCachedBinder(::android::hidl::base::V1_0::IBase* ifacePtr
  
      if (sBnObj == nullptr) {
          auto func = details::getBnConstructorMap().get(descriptor, nullptr);
+-        LOG_ALWAYS_FATAL_IF(func == nullptr, "%s getBnConstructorMap returned null for %s",
+-                            __func__, descriptor.c_str());
 +        if (!func) {
 +            // TODO(b/69122224): remove this static variable when prebuilts updated
 +            func = details::gBnConstructorMap->get(descriptor, nullptr);
 +        }
-         LOG_ALWAYS_FATAL_IF(func == nullptr, "%s getBnConstructorMap returned null for %s",
-                             __func__, descriptor.c_str());
++        LOG_ALWAYS_FATAL_IF(func == nullptr, "%s gBnConstructorMap returned null for %s", __func__,
++                            descriptor.c_str());
  
+         sBnObj = sp<IBinder>(func(static_cast<void*>(ifacePtr)));
+         LOG_ALWAYS_FATAL_IF(sBnObj == nullptr, "%s Bn constructor function returned null for %s",
 diff --git a/transport/HidlPassthroughSupport.cpp b/transport/HidlPassthroughSupport.cpp
 index e059b4d..6f30b7b 100644
 --- a/transport/HidlPassthroughSupport.cpp
@@ -90,5 +94,5 @@ index fe7c0f0..240d196 100644
      static BnConstructorMap& map = *new BnConstructorMap();
      return map;
 -- 
-2.51.0
+2.53.0
 

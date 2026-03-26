@@ -1,0 +1,26 @@
+From acb3350b1e20aabd0db2cb6e2ac9b0ffe9d5ef43 Mon Sep 17 00:00:00 2001
+From: Evelyn Torres <lostentrepreneur439@yahoo.com>
+Date: Thu, 26 Mar 2026 07:57:23 -0230
+Subject: [PATCH 3/3] Fix "Screen id 0 already exists!"
+
+---
+ src/com/android/launcher3/Workspace.java | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/com/android/launcher3/Workspace.java b/src/com/android/launcher3/Workspace.java
+index b94edbd..582225c 100644
+--- a/src/com/android/launcher3/Workspace.java
++++ b/src/com/android/launcher3/Workspace.java
+@@ -686,7 +686,8 @@ public class Workspace<T extends View & PageIndicator> extends PagedView<T>
+ 
+     public CellLayout insertNewWorkspaceScreen(int screenId, int insertIndex) {
+         if (mWorkspaceScreens.containsKey(screenId)) {
+-            throw new RuntimeException("Screen id " + screenId + " already exists!");
++            Log.w(TAG, "Screen id " + screenId + " already exists, skipping");
++            return mWorkspaceScreens.get(screenId);
+         }
+ 
+         // Inflate the cell layout, but do not add it automatically so that we can get the newly
+-- 
+2.53.0
+

@@ -1,9 +1,9 @@
-From f27d5880820516749ea57a1cf5be175267bfe5bf Mon Sep 17 00:00:00 2001
+From 9db0b0a15282a30cd9799853de42de88fdddf7c3 Mon Sep 17 00:00:00 2001
 From: Evelyn Torres <lostentrepreneur439@yahoo.com>
-Date: Sun, 1 Mar 2026 00:03:29 -0330
-Subject: [PATCH] Nuke Launcher3QuickstepGo
+Date: Thu, 26 Mar 2026 06:39:02 -0230
+Subject: [PATCH 2/3] Nuke Launcher3Go
 
-Doesn't work properly on crDroid
+Doesn't work on crDroid.
 ---
  Android.bp                                    | 129 -----
  CleanSpec.mk                                  |   4 -
@@ -113,7 +113,7 @@ Doesn't work properly on crDroid
  .../res/xml/default_workspace_4x4.xml         | 140 ------
  go/quickstep/res/xml/device_profiles.xml      |  42 --
  .../src/com/android/launcher3/AppSharing.java | 256 ----------
- .../com/android/launcher3/BuildConfig.java    |  43 --
+ .../com/android/launcher3/BuildConfig.java    |  38 --
  .../launcher3/Launcher3QuickStepGo.java       |  40 --
  .../model/AppShareabilityChecker.java         |  38 --
  .../model/AppShareabilityDatabase.java        |  60 ---
@@ -123,7 +123,7 @@ Doesn't work properly on crDroid
  .../util/MainThreadInitializedObject.java     |  71 ---
  .../quickstep/TaskOverlayFactoryGo.java       | 448 ------------------
  .../views/GoOverviewActionsView.java          | 128 -----
- 118 files changed, 4240 deletions(-)
+ 118 files changed, 4235 deletions(-)
  delete mode 100644 go/AndroidManifest-launcher.xml
  delete mode 100644 go/AndroidManifest.xml
  delete mode 100644 go/OWNERS
@@ -242,10 +242,10 @@ Doesn't work properly on crDroid
  delete mode 100644 go/quickstep/src/com/android/quickstep/views/GoOverviewActionsView.java
 
 diff --git a/Android.bp b/Android.bp
-index 68f9fd6..0b5df7b 100644
+index c9ff002..3012f58 100644
 --- a/Android.bp
 +++ b/Android.bp
-@@ -505,48 +505,6 @@ android_library {
+@@ -558,48 +558,6 @@ android_library {
      },
  }
  
@@ -294,7 +294,7 @@ index 68f9fd6..0b5df7b 100644
  // Library with all the source code and dependencies for building Quickstep
  android_library {
      name: "Launcher3QuickStepLib",
-@@ -626,93 +584,6 @@ android_app {
+@@ -679,93 +637,6 @@ android_app {
  
  }
  
@@ -3997,10 +3997,10 @@ index a97fecc..0000000
 -}
 diff --git a/go/quickstep/src/com/android/launcher3/BuildConfig.java b/go/quickstep/src/com/android/launcher3/BuildConfig.java
 deleted file mode 100644
-index cfcda39..0000000
+index 48a083a..0000000
 --- a/go/quickstep/src/com/android/launcher3/BuildConfig.java
 +++ /dev/null
-@@ -1,43 +0,0 @@
+@@ -1,38 +0,0 @@
 -/*
 - * Copyright (C) 2018 The Android Open Source Project
 - *
@@ -4027,12 +4027,7 @@ index cfcda39..0000000
 -     * Flag to state if the QSB is on the first screen and placed on the top,
 -     * this can be overwritten in other launchers with a different value, if needed.
 -     */
--    public static final boolean QSB_ON_FIRST_SCREEN = true;
--
--    /**
--     * Flag to state if the widget on the top of the first screen should be shown.
--     */
--    public static final boolean WIDGET_ON_FIRST_SCREEN = false;
+-    public static final boolean USE_QUICKSPACE_VIEW = true;
 -
 -    /**
 -     * Flag to control various developer centric features
@@ -4046,7 +4041,7 @@ index cfcda39..0000000
 -}
 diff --git a/go/quickstep/src/com/android/launcher3/Launcher3QuickStepGo.java b/go/quickstep/src/com/android/launcher3/Launcher3QuickStepGo.java
 deleted file mode 100644
-index 8bd0fec..0000000
+index bb406a2..0000000
 --- a/go/quickstep/src/com/android/launcher3/Launcher3QuickStepGo.java
 +++ /dev/null
 @@ -1,40 +0,0 @@
@@ -4080,8 +4075,8 @@ index 8bd0fec..0000000
 -    private static final String TAG = "Launcher3QuickStepGo";
 -
 -    @Override
--    public Stream<SystemShortcut.Factory> getSupportedShortcuts() {
--        Stream<SystemShortcut.Factory> shortcuts = super.getSupportedShortcuts();
+-    public Stream<SystemShortcut.Factory> getSupportedShortcuts(int container) {
+-        Stream<SystemShortcut.Factory> shortcuts = super.getSupportedShortcuts(container);
 -
 -        if (AppSharing.ENABLE_APP_SHARING) {
 -            shortcuts = Stream.concat(shortcuts, Stream.of(AppSharing.SHORTCUT_FACTORY));
@@ -5217,5 +5212,5 @@ index 4e0aec3..0000000
 -    }
 -}
 -- 
-2.51.0
+2.53.0
 
