@@ -1,4 +1,4 @@
-From 797e24c33ab09d78b5892ddc6fa7c86130a0577a Mon Sep 17 00:00:00 2001
+From a388311b8db7fd67482b3856729661ba187a2de3 Mon Sep 17 00:00:00 2001
 From: Yaroslav Zviezda <acroreiser@gmail.com>
 Date: Sat, 3 May 2025 08:08:04 -0400
 Subject: [PATCH] linker: partially allow text relocations
@@ -11,10 +11,10 @@ Change-Id: Ib929f877eaca81bb3ba06c6fba791f78de0fc417
  1 file changed, 3 deletions(-)
 
 diff --git a/linker/linker.cpp b/linker/linker.cpp
-index 5580a83..e2cca03 100644
+index 29e67ce..9aa26ed 100644
 --- a/linker/linker.cpp
 +++ b/linker/linker.cpp
-@@ -3385,9 +3385,6 @@ bool soinfo::link_image(const SymbolLookupList& lookup_list, soinfo* local_group
+@@ -3386,9 +3386,6 @@ bool soinfo::link_image(const SymbolLookupList& lookup_list, soinfo* local_group
  
  #if !defined(__LP64__)
    if (has_text_relocations) {

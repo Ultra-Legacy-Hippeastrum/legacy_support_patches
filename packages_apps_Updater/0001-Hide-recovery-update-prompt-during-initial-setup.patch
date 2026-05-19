@@ -1,0 +1,26 @@
+From e635a1996f80e84bda331484d1a4e04bb1fa9f10 Mon Sep 17 00:00:00 2001
+From: Yaroslav Zviezda <acroreiser@gmail.com>
+Date: Sun, 10 May 2026 09:03:55 -0400
+Subject: [PATCH] Hide recovery update prompt during initial setup
+
+For unknown reasons device tree overlays are not work.
+
+Change-Id: I09358f46410c3a0c7372662257f7867bc1efa861
+---
+ app/src/main/res/values/config.xml | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/app/src/main/res/values/config.xml b/app/src/main/res/values/config.xml
+index 76ab686..60f7977 100644
+--- a/app/src/main/res/values/config.xml
++++ b/app/src/main/res/values/config.xml
+@@ -15,5 +15,5 @@
+      limitations under the License.
+ -->
+ <resources>
+-    <bool name="config_hideRecoveryUpdate">false</bool>
++    <bool name="config_hideRecoveryUpdate">true</bool>
+ </resources>
+-- 
+2.53.0
+

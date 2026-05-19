@@ -1,4 +1,4 @@
-From 251a8a9ef5a5907354e6810a962e001f512b7ff5 Mon Sep 17 00:00:00 2001
+From d1806fa92a1ce13f6fa6d7ddcd77b924cf2fb489 Mon Sep 17 00:00:00 2001
 From: Dominggoes Isakh <drjisakh@gmail.com>
 Date: Sat, 29 Oct 2022 13:08:46 +0200
 Subject: [PATCH] Don't crash "Binder threadpool cannot be shrunk after
@@ -26,5 +26,5 @@ index 4b2f4fc..ee91148 100644
      // if the caller joins the pool, then there will be one thread which is impossible.
      LOG_ALWAYS_FATAL_IF(maxThreads == 0 && callerJoinsPool,
 -- 
-2.51.0
+2.53.0
 

@@ -1,0 +1,30 @@
+From 3a6fafdf2c8fd22acf8364305d68c4cbc66a0355 Mon Sep 17 00:00:00 2001
+From: Yaroslav Zviezda <acroreiser@gmail.com>
+Date: Mon, 13 Apr 2026 14:09:22 -0400
+Subject: [PATCH 7/8] am: do not protect cached processes from proactive
+ killing on low ram targets
+
+* 57c0df88 causes high memory pressure first 5 minutes after boot completion.
+
+Change-Id: Ie761e311e297f1aad9e25cdaff9be25c8d87b4e4
+---
+ services/core/java/com/android/server/am/OomAdjuster.java | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/services/core/java/com/android/server/am/OomAdjuster.java b/services/core/java/com/android/server/am/OomAdjuster.java
+index 1ae9c6b72..5383dfcb0 100644
+--- a/services/core/java/com/android/server/am/OomAdjuster.java
++++ b/services/core/java/com/android/server/am/OomAdjuster.java
+@@ -1456,6 +1456,9 @@ public abstract class OomAdjuster {
+     private boolean shouldKillExcessiveProcesses(long nowUptime) {
+         final long lastUserUnlockingUptime = mService.mUserController.getLastUserUnlockingUptime();
+ 
++        if (ActivityManager.isLowRamDeviceStatic())
++            return true;
++
+         if (lastUserUnlockingUptime == 0) {
+             // No users have been unlocked.
+             return !mConstants.mNoKillCachedProcessesUntilBootCompleted;
+-- 
+2.53.0
+

@@ -1,4 +1,4 @@
-From 38b421fc9f4d11640e9621a3d092a4fad6ce704f Mon Sep 17 00:00:00 2001
+From 9fc9c95ff2b489855e6f886aad9eb18e878b3de3 Mon Sep 17 00:00:00 2001
 From: davigamer987 <davimarchesiprimo@gmail.com>
 Date: Mon, 20 Oct 2025 22:04:05 +0300
 Subject: [PATCH 5/8] renderengine: gles: Fix QPR2 build errors
@@ -9,7 +9,7 @@ Change-Id: I0535f85380a926e59900a6359309119a806c4ef0
  1 file changed, 4 insertions(+), 2 deletions(-)
 
 diff --git a/libs/renderengine/gl/GLESRenderEngine.cpp b/libs/renderengine/gl/GLESRenderEngine.cpp
-index 94ce273..085baf6 100644
+index 4a879ab..038708d 100644
 --- a/libs/renderengine/gl/GLESRenderEngine.cpp
 +++ b/libs/renderengine/gl/GLESRenderEngine.cpp
 @@ -1110,7 +1110,7 @@ void GLESRenderEngine::drawLayersInternal(

@@ -1,4 +1,4 @@
-From 62c60d4f898cb91baa4883b7dd5fa6283b998f62 Mon Sep 17 00:00:00 2001
+From cb50d530520d8650754979b83c257546bb8ea497 Mon Sep 17 00:00:00 2001
 From: Giovanni Ricca <giovanniricca@proton.me>
 Date: Wed, 17 Aug 2022 21:36:43 +0200
 Subject: [PATCH] Revert "delete gBn/sConstructorMap"

@@ -1,13 +1,15 @@
-From 28f7a932379e631198dc4b88f4e3d37a025ac15d Mon Sep 17 00:00:00 2001
+From 4dce330c043db6671d558e486ce5be17facae574 Mon Sep 17 00:00:00 2001
 From: Evelyn Torres <lostentrepreneur439@yahoo.com>
-Date: Sun, 1 Mar 2026 00:01:43 -0330
-Subject: [PATCH] Nuke Launcher3Quickstep Go
+Date: Tue, 19 May 2026 10:40:47 -0230
+Subject: [PATCH] config: Nuke Go support
 
-Doesn't work properly on crDroid
+Go support is broken in crDroid, and causes issues on devices like hammerhead
 ---
  config/common_mobile.mk | 8 --------
- 2 files changed, 4 insertions(+), 8 deletions(-)
+ 1 file changed, 8 deletions(-)
 
+diff --git a/config/common_mobile.mk b/config/common_mobile.mk
+index 5c15ad1..9c843f7 100644
 --- a/config/common_mobile.mk
 +++ b/config/common_mobile.mk
 @@ -20,19 +20,11 @@ PRODUCT_PACKAGES += \
@@ -31,5 +33,5 @@ Doesn't work properly on crDroid
  PRODUCT_PACKAGES += \
      Launcher3Overlay
 -- 
-2.51.0
+2.53.0
 

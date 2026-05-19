@@ -1,8 +1,9 @@
-From b89d9af7a016af705d50a2d77b230acb1e303017 Mon Sep 17 00:00:00 2001
+From b96ff93fdfd018c1fd01ae44ed3a42587b706496 Mon Sep 17 00:00:00 2001
 From: Yaroslav Zviezda <acroreiser@gmail.com>
 Date: Wed, 29 Dec 2021 11:41:03 +0300
-Subject: [PATCH] sepolicy: allow su domain in user builds Do not use for
- anything except boot time one shot scripts.
+Subject: [PATCH] sepolicy: allow su domain in user builds
+
+Do not use for anything except boot time one shot scripts.
 
 Change-Id: I3ac61e9e3e9741d512ece95c86a8e7ee1617a926
 ---
@@ -26,10 +27,10 @@ Change-Id: I3ac61e9e3e9741d512ece95c86a8e7ee1617a926
  17 files changed, 39 insertions(+), 58 deletions(-)
 
 diff --git a/build/soong/policy.go b/build/soong/policy.go
-index 1053edf..a09475e 100644
+index 23ff255..c34eb81 100644
 --- a/build/soong/policy.go
 +++ b/build/soong/policy.go
-@@ -556,7 +556,7 @@ func (c *policyBinary) GenerateAndroidBuildActions(ctx android.ModuleContext) {
+@@ -558,7 +558,7 @@ func (c *policyBinary) GenerateAndroidBuildActions(ctx android.ModuleContext) {
  		rule.Temporary(permissiveDomains)
  
  		msg := `==========\n` +
@@ -38,7 +39,7 @@ index 1053edf..a09475e 100644
  			`List of invalid domains:`
  
  		rule.Command().Text("if test").
-@@ -566,7 +566,7 @@ func (c *policyBinary) GenerateAndroidBuildActions(ctx android.ModuleContext) {
+@@ -568,7 +568,7 @@ func (c *policyBinary) GenerateAndroidBuildActions(ctx android.ModuleContext) {
  			Text(`"` + msg + `"`).
  			Text("&& cat ").
  			Input(permissiveDomains).
@@ -311,7 +312,7 @@ index bac0ae0..fcb9822 100644
  # su is also permissive to permit setenforce.
  permissive su;
 diff --git a/private/init.te b/private/init.te
-index 91ea3e9..a1b4480 100644
+index 31c4103..eb96c66 100644
 --- a/private/init.te
 +++ b/private/init.te
 @@ -28,13 +28,13 @@ domain_trans(init, { rootfs toolbox_exec }, modprobe)

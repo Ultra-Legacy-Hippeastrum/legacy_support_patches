@@ -1,4 +1,4 @@
-From ad3303af1f6c4753b0e7bd39e116b89f884e6688 Mon Sep 17 00:00:00 2001
+From dd67a1022d799a4b60571362d943730955e0ab40 Mon Sep 17 00:00:00 2001
 From: Yaroslav Zviezda <acroreiser@gmail.com>
 Date: Sun, 22 Mar 2026 14:53:12 -0400
 Subject: [PATCH 2/2] Revert "libprocessgroup: CgroupSetup should fail if a

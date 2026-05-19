@@ -1,4 +1,4 @@
-From 28560b4c201a3c2466a784b0697e50a1262f4213 Mon Sep 17 00:00:00 2001
+From 35193acc0c72ec10dd35d7c6d4adb2bf3356a307 Mon Sep 17 00:00:00 2001
 From: TARKZiM <tom8476oo@gmail.com>
 Date: Fri, 24 Oct 2025 00:07:47 +0300
 Subject: [PATCH 2/2] QCOM: Bring back legacy platform definitions
@@ -42,7 +42,7 @@ index 62ae73d..66881a8 100644
  QCOM_BOARD_PLATFORMS += msm8937
  QCOM_BOARD_PLATFORMS += msm8953
 diff --git a/qcom_defs.mk b/qcom_defs.mk
-index 3ea9e92..e5dc469 100644
+index 42d505d..0e568da 100644
 --- a/qcom_defs.mk
 +++ b/qcom_defs.mk
 @@ -2,6 +2,11 @@

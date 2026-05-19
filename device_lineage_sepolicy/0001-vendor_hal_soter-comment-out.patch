@@ -1,0 +1,24 @@
+From fb387e59932eb069a16567383cabd5abd5a5b526 Mon Sep 17 00:00:00 2001
+From: Yaroslav Zviezda <acroreiser@gmail.com>
+Date: Mon, 18 May 2026 17:03:52 -0400
+Subject: [PATCH] vendor_hal_soter: comment out
+
+Seems it need to be defined in device/qcom/sepolicy-legacy
+but vendor_hal_soter actually unused at the moment.
+Would be good to get rid of this patch later.
+
+Change-Id: I2c78c576e595e771577d989c1c3b6520a593c90f
+---
+ qcom/private/platform_app.te | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/qcom/private/platform_app.te b/qcom/private/platform_app.te
+index 87bd5c6..bafea21 100644
+--- a/qcom/private/platform_app.te
++++ b/qcom/private/platform_app.te
+@@ -1 +1 @@
+-hal_client_domain(platform_app, vendor_hal_soter)
++#hal_client_domain(platform_app, vendor_hal_soter)
+-- 
+2.53.0
+

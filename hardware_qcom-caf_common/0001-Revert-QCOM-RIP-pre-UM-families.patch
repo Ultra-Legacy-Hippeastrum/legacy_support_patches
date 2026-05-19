@@ -1,4 +1,4 @@
-From 157852de80c60f1e9bebe3b6a3717e42d90f24c0 Mon Sep 17 00:00:00 2001
+From ea5a4ae6209a64ae526f81829b251e30582d4e49 Mon Sep 17 00:00:00 2001
 From: Khalvat-M <mmba313@gmail.com>
 Date: Fri, 24 Oct 2025 00:05:52 +0300
 Subject: [PATCH 1/2] Revert "QCOM: RIP pre-UM families"
@@ -11,7 +11,7 @@ Change-Id: Id97dd264bb83aef09f93052f4522b2b9bff99a15
  1 file changed, 31 insertions(+), 1 deletion(-)
 
 diff --git a/BoardConfigQcom.mk b/BoardConfigQcom.mk
-index e1cdcac..551c5c8 100644
+index b40f592..4c8dc39 100644
 --- a/BoardConfigQcom.mk
 +++ b/BoardConfigQcom.mk
 @@ -1,6 +1,9 @@

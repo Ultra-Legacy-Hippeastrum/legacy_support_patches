@@ -1,4 +1,4 @@
-From f4db7da1ffb8c70c6e2e5b6f44a1df21c83e1505 Mon Sep 17 00:00:00 2001
+From 32b8274d72127299e46e9592993b9f6b72ced536 Mon Sep 17 00:00:00 2001
 From: Yaroslav Zviezda <acroreiser@gmail.com>
 Date: Mon, 20 Oct 2025 22:02:31 +0300
 Subject: [PATCH 4/8] renderengine: gles: unconditionally skip
@@ -16,7 +16,7 @@ Change-Id: I7974628d1207672fb3b6ad91f0bb4638b7584f7c
  1 file changed, 3 insertions(+), 2 deletions(-)
 
 diff --git a/libs/renderengine/gl/GLESRenderEngine.cpp b/libs/renderengine/gl/GLESRenderEngine.cpp
-index 393e011..94ce273 100644
+index 0e9fa8d..4a879ab 100644
 --- a/libs/renderengine/gl/GLESRenderEngine.cpp
 +++ b/libs/renderengine/gl/GLESRenderEngine.cpp
 @@ -970,8 +970,9 @@ void GLESRenderEngine::unbindFrameBuffer(Framebuffer* /*framebuffer*/) {

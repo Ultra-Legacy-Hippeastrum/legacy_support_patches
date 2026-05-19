@@ -1,11 +1,11 @@
-From 9db0b0a15282a30cd9799853de42de88fdddf7c3 Mon Sep 17 00:00:00 2001
+From f60b2d83944f809c9cc00ddb0ccbbaf1a0a9ebbd Mon Sep 17 00:00:00 2001
 From: Evelyn Torres <lostentrepreneur439@yahoo.com>
-Date: Thu, 26 Mar 2026 06:39:02 -0230
-Subject: [PATCH 2/3] Nuke Launcher3Go
+Date: Tue, 19 May 2026 10:37:03 -0230
+Subject: [PATCH] launcher3: Nuke Go support
 
-Doesn't work on crDroid.
+Not functional on crDroid, breaks launcher on devices like hammerhead
 ---
- Android.bp                                    | 129 -----
+ Android.bp                                    | 130 -----
  CleanSpec.mk                                  |   4 -
  go/AndroidManifest-launcher.xml               |  75 ---
  go/AndroidManifest.xml                        |  63 ---
@@ -114,7 +114,7 @@ Doesn't work on crDroid.
  go/quickstep/res/xml/device_profiles.xml      |  42 --
  .../src/com/android/launcher3/AppSharing.java | 256 ----------
  .../com/android/launcher3/BuildConfig.java    |  38 --
- .../launcher3/Launcher3QuickStepGo.java       |  40 --
+ .../launcher3/Launcher3QuickStepGo.java       |  41 --
  .../model/AppShareabilityChecker.java         |  38 --
  .../model/AppShareabilityDatabase.java        |  60 ---
  .../model/AppShareabilityJobService.java      |  77 ---
@@ -123,7 +123,7 @@ Doesn't work on crDroid.
  .../util/MainThreadInitializedObject.java     |  71 ---
  .../quickstep/TaskOverlayFactoryGo.java       | 448 ------------------
  .../views/GoOverviewActionsView.java          | 128 -----
- 118 files changed, 4235 deletions(-)
+ 118 files changed, 4237 deletions(-)
  delete mode 100644 go/AndroidManifest-launcher.xml
  delete mode 100644 go/AndroidManifest.xml
  delete mode 100644 go/OWNERS
@@ -242,11 +242,11 @@ Doesn't work on crDroid.
  delete mode 100644 go/quickstep/src/com/android/quickstep/views/GoOverviewActionsView.java
 
 diff --git a/Android.bp b/Android.bp
-index c9ff002..3012f58 100644
+index bcad2af..d97c092 100644
 --- a/Android.bp
 +++ b/Android.bp
-@@ -558,48 +558,6 @@ android_library {
-     },
+@@ -566,49 +566,6 @@ android_library {
+     ],
  }
  
 -// Library with all the source code and dependencies for building Launcher Go
@@ -273,6 +273,7 @@ index c9ff002..3012f58 100644
 -    static_libs: [
 -        "QuickstepResLib",
 -        "androidx.room_room-runtime",
+-        "androidx.room_room-ktx",
 -    ],
 -    plugins: [
 -        "androidx.room_room-compiler-plugin",
@@ -294,7 +295,7 @@ index c9ff002..3012f58 100644
  // Library with all the source code and dependencies for building Quickstep
  android_library {
      name: "Launcher3QuickStepLib",
-@@ -679,93 +637,6 @@ android_app {
+@@ -693,93 +650,6 @@ android_app {
  
  }
  
@@ -1261,7 +1262,7 @@ index 7db34ae..0000000
 -</resources>
 diff --git a/go/quickstep/res/values-ca/strings.xml b/go/quickstep/res/values-ca/strings.xml
 deleted file mode 100644
-index 889f50e..0000000
+index 134f224..0000000
 --- a/go/quickstep/res/values-ca/strings.xml
 +++ /dev/null
 @@ -1,20 +0,0 @@
@@ -1276,7 +1277,7 @@ index 889f50e..0000000
 -    <string name="dialog_cancel" msgid="6464336969134856366">"CANCEL·LA"</string>
 -    <string name="dialog_settings" msgid="6564397136021186148">"CONFIGURACIÓ"</string>
 -    <string name="niu_actions_confirmation_title" msgid="3863451714863526143">"Tradueix o escolta el text en pantalla"</string>
--    <string name="niu_actions_confirmation_text" msgid="2105271481950866089">"És possible que determinada informació es comparteixi amb Google, com ara el text en pantalla, les adreces web i les captures de pantalla.\n\nPer canviar quina informació comparteixes, ves a "<b>"Configuració &gt; Aplicacions &gt; Aplicacions predeterminades &gt; Aplicació de l\'assistent digital"</b>"."</string>
+-    <string name="niu_actions_confirmation_text" msgid="2105271481950866089">"És possible que determinada informació es comparteixi amb Google, com ara el text en pantalla, les adreces web i les captures de pantalla.\n\nPer canviar quina informació comparteixes, ves a "<b>"Configuració &gt; Aplicacions &gt; Aplicacions predeterminades &gt; Aplicació d\'assistent digital"</b>"."</string>
 -    <string name="assistant_not_selected_title" msgid="5017072974603345228">"Tria un assistent per utilitzar aquesta funció"</string>
 -    <string name="assistant_not_selected_text" msgid="3244613673884359276">"Per escoltar o traduir text en pantalla, tria una aplicació d\'assistent digital a Configuració"</string>
 -    <string name="assistant_not_supported_title" msgid="1675788067597484142">"Canvia l\'assistent per utilitzar aquesta funció"</string>
@@ -3444,7 +3445,7 @@ index 42f4702..0000000
 -</resources>
 diff --git a/go/quickstep/res/values/styles.xml b/go/quickstep/res/values/styles.xml
 deleted file mode 100644
-index 4f66829..0000000
+index 2524c76..0000000
 --- a/go/quickstep/res/values/styles.xml
 +++ /dev/null
 @@ -1,90 +0,0 @@
@@ -3491,7 +3492,7 @@ index 4f66829..0000000
 -    </style>
 -
 -    <style name="GoOverviewActionButtonCaption">
--        <item name="android:fontFamily">@*android:string/config_bodyFontFamilyMedium</item>
+-        <item name="android:fontFamily">sans-serif-medium</item>
 -        <item name="android:textSize">14dp</item>
 -        <item name="android:textColor">?attr/overviewButtonTextColor</item>
 -        <item name="android:lineHeight">20dp</item>
@@ -3511,7 +3512,7 @@ index 4f66829..0000000
 -
 -    <!-- Modal Dialogs -->
 -    <style name="ModalDialogTitle">
--        <item name="android:fontFamily">@*android:string/config_headlineFontFamily</item>
+-        <item name="android:fontFamily">sans-serif-medium</item>
 -        <item name="android:textSize">20sp</item>
 -        <item name="android:textColor">?android:attr/textColorPrimary</item>
 -        <item name="android:lineHeight">24dp</item>
@@ -3521,7 +3522,7 @@ index 4f66829..0000000
 -    </style>
 -
 -    <style name="ModalDialogText">
--        <item name="android:fontFamily">@*android:string/config_bodyFontFamilyMedium</item>
+-        <item name="android:fontFamily">sans-serif-medium</item>
 -        <item name="android:textSize">16sp</item>
 -        <item name="android:textColor">?android:attr/textColorTertiary</item>
 -        <item name="android:lineHeight">24dp</item>
@@ -4041,10 +4042,10 @@ index 48a083a..0000000
 -}
 diff --git a/go/quickstep/src/com/android/launcher3/Launcher3QuickStepGo.java b/go/quickstep/src/com/android/launcher3/Launcher3QuickStepGo.java
 deleted file mode 100644
-index bb406a2..0000000
+index 41fc597..0000000
 --- a/go/quickstep/src/com/android/launcher3/Launcher3QuickStepGo.java
 +++ /dev/null
-@@ -1,40 +0,0 @@
+@@ -1,41 +0,0 @@
 -/*
 - * Copyright (C) 2020 The Android Open Source Project
 - *
@@ -4063,6 +4064,7 @@ index bb406a2..0000000
 -
 -package com.android.launcher3;
 -
+-import com.android.launcher3.model.data.ItemInfo;
 -import com.android.launcher3.popup.SystemShortcut;
 -import com.android.launcher3.uioverrides.QuickstepLauncher;
 -
@@ -4075,8 +4077,8 @@ index bb406a2..0000000
 -    private static final String TAG = "Launcher3QuickStepGo";
 -
 -    @Override
--    public Stream<SystemShortcut.Factory> getSupportedShortcuts(int container) {
--        Stream<SystemShortcut.Factory> shortcuts = super.getSupportedShortcuts(container);
+-    public Stream<SystemShortcut.Factory> getSupportedShortcuts(ItemInfo itemInfo) {
+-        Stream<SystemShortcut.Factory> shortcuts = super.getSupportedShortcuts(itemInfo);
 -
 -        if (AppSharing.ENABLE_APP_SHARING) {
 -            shortcuts = Stream.concat(shortcuts, Stream.of(AppSharing.SHORTCUT_FACTORY));

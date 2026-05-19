@@ -1,7 +1,7 @@
-From 0c737cfb1c64dc751513597f56f05cab320de36a Mon Sep 17 00:00:00 2001
+From 22fe8bedfeca9e035c310a48e552f0c08e2093bb Mon Sep 17 00:00:00 2001
 From: Pierre-Hugues Husson <phh@phh.me>
 Date: Wed, 18 Oct 2023 16:53:40 -0400
-Subject: [PATCH 1/6] Ignore cgroup creation errors
+Subject: [PATCH 2/8] Ignore cgroup creation errors
 
 For old kernels who don't have those modern cgroups
 
@@ -12,10 +12,10 @@ Change-Id: I4fe01f38c2dd00455394838ad78c4cbcfea10657
  2 files changed, 2 insertions(+), 5 deletions(-)
 
 diff --git a/core/jni/com_android_internal_os_Zygote.cpp b/core/jni/com_android_internal_os_Zygote.cpp
-index ddd7c5ca7..15998f8bf 100644
+index a92c6c871..902d67079 100644
 --- a/core/jni/com_android_internal_os_Zygote.cpp
 +++ b/core/jni/com_android_internal_os_Zygote.cpp
-@@ -1970,12 +1970,14 @@ static void SpecializeCommon(JNIEnv* env, uid_t uid, gid_t gid, jintArray gids,
+@@ -1968,12 +1968,14 @@ static void SpecializeCommon(JNIEnv* env, uid_t uid, gid_t gid, jintArray gids,
      // since the directory is owned by root.
      if (getuid() == 0) {
          const int rc = createProcessGroup(uid, getpid());
@@ -27,14 +27,14 @@ index ddd7c5ca7..15998f8bf 100644
                                                  /* pid= */ 0, strerror(-rc)));
          }
 +#endif
-     }
  
-     SetGids(env, gids, is_child_zygote, fail_fn);
+         if (is_system_server && UsePerAppMemcg()) {
+             // Assign system_server to the correct memory cgroup.
 diff --git a/services/core/java/com/android/server/am/ProcessList.java b/services/core/java/com/android/server/am/ProcessList.java
-index 63e480f0e..f251aeaf6 100644
+index 3defe011e..2060d0689 100644
 --- a/services/core/java/com/android/server/am/ProcessList.java
 +++ b/services/core/java/com/android/server/am/ProcessList.java
-@@ -2597,14 +2597,9 @@ public final class ProcessList {
+@@ -2655,14 +2655,9 @@ public final class ProcessList implements ProcessStateController.ProcessLruUpdat
                          // If we're not told to skip the process group creation, go create it.
                          final int res = Process.createProcessGroup(uid, startResult.pid);
                          if (res < 0) {

@@ -1,7 +1,7 @@
-From ee256071bf89bb268987d9c370bec37b2b513900 Mon Sep 17 00:00:00 2001
+From 6cf75f1b2ba86a36e34086746e256ef25c7b59cd Mon Sep 17 00:00:00 2001
 From: Yaroslav Zviezda <acroreiser@gmail.com>
 Date: Mon, 20 Oct 2025 22:01:25 +0300
-Subject: [PATCH 3/8] Forward-port GLES Render Engine to W
+Subject: [PATCH 3/8] Forward-port GLES Render Engine to 16 QPR2
 
 Technically a revert "Delete GLESRenderEngine" + fixes.
 
@@ -55,8 +55,7 @@ Change-Id: I0caac7477fa5ee725116a996aa0db3d78cf9f662
  .../renderengine/private/Description.h        |   92 +
  libs/renderengine/mock/Framebuffer.cpp        |   30 +
  libs/renderengine/mock/Image.cpp              |   30 +
- libs/renderengine/skia/Cache.cpp              |    2 +-
- libs/renderengine/skia/SkiaGLRenderEngine.cpp |   31 +-
+ libs/renderengine/skia/SkiaGLRenderEngine.cpp |   33 +-
  libs/renderengine/skia/SkiaRenderEngine.h     |    1 +
  .../tests/RenderEngineThreadedTest.cpp        |   12 +
  .../threaded/RenderEngineThreaded.cpp         |   56 +-
@@ -65,7 +64,7 @@ Change-Id: I0caac7477fa5ee725116a996aa0db3d78cf9f662
  services/surfaceflinger/Layer.h               |    2 +
  services/surfaceflinger/SurfaceFlinger.cpp    |   13 +-
  .../tests/unittests/CompositionTest.cpp       |    2 +
- 53 files changed, 6672 insertions(+), 50 deletions(-)
+ 52 files changed, 6672 insertions(+), 50 deletions(-)
  create mode 100644 libs/renderengine/Description.cpp
  create mode 100644 libs/renderengine/Mesh.cpp
  create mode 100644 libs/renderengine/Texture.cpp
@@ -106,10 +105,10 @@ Change-Id: I0caac7477fa5ee725116a996aa0db3d78cf9f662
  create mode 100644 libs/renderengine/mock/Image.cpp
 
 diff --git a/libs/renderengine/Android.bp b/libs/renderengine/Android.bp
-index f0b97ef..ef771aa 100644
+index 847a886..447ee80 100644
 --- a/libs/renderengine/Android.bp
 +++ b/libs/renderengine/Android.bp
-@@ -69,8 +69,30 @@ cc_library_static {
+@@ -70,8 +70,30 @@ cc_library_static {
  filegroup {
      name: "librenderengine_sources",
      srcs: [
@@ -140,16 +139,16 @@ index f0b97ef..ef771aa 100644
      ],
  }
  
-@@ -89,7 +111,7 @@ filegroup {
+@@ -90,7 +112,7 @@ filegroup {
          "skia/ColorSpaces.cpp",
          "skia/GaneshVkRenderEngine.cpp",
          "skia/GraphiteVkRenderEngine.cpp",
 -        "skia/GLExtensions.cpp",
 +        "gl/GLExtensions.cpp",
+         "skia/ShaderCache.cpp",
          "skia/SkiaRenderEngine.cpp",
-         "skia/SkiaGLRenderEngine.cpp",
-         "skia/SkiaVkRenderEngine.cpp",
-@@ -150,6 +172,7 @@ cc_library_static {
+         "skia/RenderDocUtils.cpp",
+@@ -158,6 +180,7 @@ cc_library_static {
      ],
      srcs: [
          ":librenderengine_sources",
@@ -157,7 +156,7 @@ index f0b97ef..ef771aa 100644
          ":librenderengine_threaded_sources",
          ":librenderengine_skia_sources",
      ],
-@@ -168,6 +191,8 @@ cc_library_static {
+@@ -176,6 +199,8 @@ cc_library_static {
      name: "librenderengine_mocks",
      defaults: ["librenderengine_defaults"],
      srcs: [
@@ -401,7 +400,7 @@ index 0000000..ed2f45f
 +} // namespace renderengine
 +} // namespace android
 diff --git a/libs/renderengine/RenderEngine.cpp b/libs/renderengine/RenderEngine.cpp
-index b61e14c..1717be4 100644
+index cc9d1ca..d09a117 100644
 --- a/libs/renderengine/RenderEngine.cpp
 +++ b/libs/renderengine/RenderEngine.cpp
 @@ -16,6 +16,7 @@
@@ -412,7 +411,7 @@ index b61e14c..1717be4 100644
  #include "renderengine/ExternalTexture.h"
  #include "skia/GaneshVkRenderEngine.h"
  #include "skia/GraphiteVkRenderEngine.h"
-@@ -72,7 +73,7 @@ std::unique_ptr<RenderEngine> RenderEngine::create(const RenderEngineCreationArg
+@@ -50,7 +51,7 @@ std::unique_ptr<RenderEngine> RenderEngine::create(const RenderEngineCreationArg
              };
          } else { // GL
              createInstanceFactory = [args]() {
@@ -506,7 +505,7 @@ index 0000000..154cde8
 +} // namespace android
 diff --git a/libs/renderengine/gl/GLESRenderEngine.cpp b/libs/renderengine/gl/GLESRenderEngine.cpp
 new file mode 100644
-index 0000000..393e011
+index 0000000..0e9fa8d
 --- /dev/null
 +++ b/libs/renderengine/gl/GLESRenderEngine.cpp
 @@ -0,0 +1,1862 @@
@@ -741,16 +740,16 @@ index 0000000..393e011
 +    }
 +
 +    switch (args.contextPriority) {
-+        case RenderEngine::ContextPriority::REALTIME:
++        case RenderEngine::ContextPriority::Realtime:
 +            if (gl::GLExtensions::getInstance().hasRealtimePriority()) {
-+                return RenderEngine::ContextPriority::REALTIME;
++                return RenderEngine::ContextPriority::Realtime;
 +            } else {
 +                ALOGI("Realtime priority unsupported, degrading gracefully to high priority");
-+                return RenderEngine::ContextPriority::HIGH;
++                return RenderEngine::ContextPriority::High;
 +            }
-+        case RenderEngine::ContextPriority::HIGH:
-+        case RenderEngine::ContextPriority::MEDIUM:
-+        case RenderEngine::ContextPriority::LOW:
++        case RenderEngine::ContextPriority::High:
++        case RenderEngine::ContextPriority::Medium:
++        case RenderEngine::ContextPriority::Low:
 +            return args.contextPriority;
 +        default:
 +            return std::nullopt;
@@ -791,12 +790,12 @@ index 0000000..393e011
 +    EGLContext protectedContext = EGL_NO_CONTEXT;
 +    if (args.enableProtectedContext && extensions.hasProtectedContent()) {
 +        protectedContext =
-+                createEglContext(display, config, nullptr, priority, Protection::PROTECTED);
++                createEglContext(display, config, nullptr, priority, Protection::Protected);
 +        ALOGE_IF(protectedContext == EGL_NO_CONTEXT, "Can't create protected context");
 +    }
 +
 +    EGLContext ctxt =
-+            createEglContext(display, config, protectedContext, priority, Protection::UNPROTECTED);
++            createEglContext(display, config, protectedContext, priority, Protection::Unprotected);
 +
 +    // if can't create a GL context, we can only abort.
 +    LOG_ALWAYS_FATAL_IF(ctxt == EGL_NO_CONTEXT, "EGLContext creation failed");
@@ -804,7 +803,7 @@ index 0000000..393e011
 +    EGLSurface stub = EGL_NO_SURFACE;
 +    if (!extensions.hasSurfacelessContext()) {
 +        stub = createStubEglPbufferSurface(display, config, args.pixelFormat,
-+                                           Protection::UNPROTECTED);
++                                           Protection::Unprotected);
 +        LOG_ALWAYS_FATAL_IF(stub == EGL_NO_SURFACE, "can't create stub pbuffer");
 +    }
 +    EGLBoolean success = eglMakeCurrent(display, stub, stub, ctxt);
@@ -815,7 +814,7 @@ index 0000000..393e011
 +    EGLSurface protectedStub = EGL_NO_SURFACE;
 +    if (protectedContext != EGL_NO_CONTEXT && !extensions.hasSurfacelessContext()) {
 +        protectedStub = createStubEglPbufferSurface(display, config, args.pixelFormat,
-+                                                    Protection::PROTECTED);
++                                                    Protection::Protected);
 +        ALOGE_IF(protectedStub == EGL_NO_SURFACE, "can't create protected stub pbuffer");
 +    }
 +
@@ -891,7 +890,7 @@ index 0000000..393e011
 +GLESRenderEngine::GLESRenderEngine(const RenderEngineCreationArgs& args, EGLDisplay display,
 +                                   EGLConfig config, EGLContext ctxt, EGLSurface stub,
 +                                   EGLContext protectedContext, EGLSurface protectedStub)
-+      : RenderEngine(Threaded::NO),
++      : RenderEngine(Threaded::No),
 +        mEGLDisplay(display),
 +        mEGLConfig(config),
 +        mEGLContext(ctxt),
@@ -1432,7 +1431,7 @@ index 0000000..393e011
 +    // Finally, we cut the layer into 3 parts, with top and bottom parts having rounded corners
 +    // and the middle part without rounded corners.
 +    const int32_t radius = ceil(
-+            (layer.geometry.roundedCornersRadius.x + layer.geometry.roundedCornersRadius.y) / 2.0);
++            (layer.geometry.roundedCornersRadii.topLeft.x + layer.geometry.roundedCornersRadii.topLeft.y) / 2.0);
 +    const Rect topRect(bounds.left, bounds.top, bounds.right, bounds.top + radius);
 +    setScissor(topRect);
 +    drawMesh(mesh);
@@ -1777,7 +1776,7 @@ index 0000000..393e011
 +        const half3 solidColor = layer.source.solidColor;
 +        const half4 color = half4(solidColor.r, solidColor.g, solidColor.b, layer.alpha);
 +        const float radius =
-+                (layer.geometry.roundedCornersRadius.x + layer.geometry.roundedCornersRadius.y) /
++                (layer.geometry.roundedCornersRadii.topLeft.x + layer.geometry.roundedCornersRadii.topLeft.y) /
 +                2.0f;
 +        // Buffer sources will have a black solid color ignored in the shader,
 +        // so in that scenario the solid color passed here is arbitrary.
@@ -2174,22 +2173,22 @@ index 0000000..393e011
 +    if (contextPriority) {
 +        contextAttributes.push_back(EGL_CONTEXT_PRIORITY_LEVEL_IMG);
 +        switch (*contextPriority) {
-+            case ContextPriority::REALTIME:
++            case ContextPriority::Realtime:
 +                contextAttributes.push_back(EGL_CONTEXT_PRIORITY_REALTIME_NV);
 +                break;
-+            case ContextPriority::MEDIUM:
++            case ContextPriority::Medium:
 +                contextAttributes.push_back(EGL_CONTEXT_PRIORITY_MEDIUM_IMG);
 +                break;
-+            case ContextPriority::LOW:
++            case ContextPriority::Low:
 +                contextAttributes.push_back(EGL_CONTEXT_PRIORITY_LOW_IMG);
 +                break;
-+            case ContextPriority::HIGH:
++            case ContextPriority::High:
 +            default:
 +                contextAttributes.push_back(EGL_CONTEXT_PRIORITY_HIGH_IMG);
 +                break;
 +        }
 +    }
-+    if (protection == Protection::PROTECTED) {
++    if (protection == Protection::Protected) {
 +        contextAttributes.push_back(EGL_PROTECTED_CONTENT_EXT);
 +        contextAttributes.push_back(EGL_TRUE);
 +    }
@@ -2224,7 +2223,7 @@ index 0000000..393e011
 +    attributes.push_back(1);
 +    attributes.push_back(EGL_HEIGHT);
 +    attributes.push_back(1);
-+    if (protection == Protection::PROTECTED) {
++    if (protection == Protection::Protected) {
 +        attributes.push_back(EGL_PROTECTED_CONTENT_EXT);
 +        attributes.push_back(EGL_TRUE);
 +    }
@@ -6691,10 +6690,10 @@ index 0000000..167f13f
 +} // namespace android
 +#endif /* SF_RENDER_ENGINE_MESH_H */
 diff --git a/libs/renderengine/include/renderengine/RenderEngine.h b/libs/renderengine/include/renderengine/RenderEngine.h
-index 3f6f2dd..57db14c 100644
+index eba8766..6616fb7 100644
 --- a/libs/renderengine/include/renderengine/RenderEngine.h
 +++ b/libs/renderengine/include/renderengine/RenderEngine.h
-@@ -22,6 +22,8 @@
+@@ -23,6 +23,8 @@
  #include <math/mat4.h>
  #include <renderengine/DisplaySettings.h>
  #include <renderengine/ExternalTexture.h>
@@ -6703,7 +6702,7 @@ index 3f6f2dd..57db14c 100644
  #include <renderengine/LayerSettings.h>
  #include <stdint.h>
  #include <sys/types.h>
-@@ -242,6 +244,8 @@ public:
+@@ -264,6 +266,8 @@ public:
      // being drawn, then the implementation is free to silently ignore this call.
      virtual void cleanupPostRender() = 0;
  
@@ -7046,24 +7045,11 @@ index 0000000..57f4346
 +} // namespace mock
 +} // namespace renderengine
 +} // namespace android
-diff --git a/libs/renderengine/skia/Cache.cpp b/libs/renderengine/skia/Cache.cpp
-index 09c37dc..cb1c8e2 100644
---- a/libs/renderengine/skia/Cache.cpp
-+++ b/libs/renderengine/skia/Cache.cpp
-@@ -654,7 +654,7 @@ static void drawEdgeExtensionLayers(SkiaRenderEngine* renderengine, const Displa
-     for (float alpha : {0.5, 0.0, 1.0}) {
-         layer.alpha = alpha;
-         auto layers = std::vector<LayerSettings>{layer};
--        renderengine->drawLayers(display, layers, dstTexture, base::unique_fd());
-+        renderengine->drawLayers(display, layers, dstTexture, false, base::unique_fd());
-     }
- }
- 
 diff --git a/libs/renderengine/skia/SkiaGLRenderEngine.cpp b/libs/renderengine/skia/SkiaGLRenderEngine.cpp
-index acbb07c..dc8ac93 100644
+index 291177d..2d85295 100644
 --- a/libs/renderengine/skia/SkiaGLRenderEngine.cpp
 +++ b/libs/renderengine/skia/SkiaGLRenderEngine.cpp
-@@ -38,26 +38,17 @@
+@@ -36,26 +36,17 @@
  #include <memory>
  #include <numeric>
  
@@ -7093,7 +7079,7 @@ index acbb07c..dc8ac93 100644
  static status_t selectConfigForAttribute(EGLDisplay dpy, EGLint const* attrs, EGLint attribute,
                                           EGLint wanted, EGLConfig* outConfig) {
      EGLint numConfigs = -1, n = 0;
-@@ -160,7 +151,7 @@ std::unique_ptr<SkiaGLRenderEngine> SkiaGLRenderEngine::create(
+@@ -158,7 +149,7 @@ std::unique_ptr<SkiaGLRenderEngine> SkiaGLRenderEngine::create(
          LOG_ALWAYS_FATAL("eglQueryString(EGL_EXTENSIONS) failed");
      }
  
@@ -7102,7 +7088,16 @@ index acbb07c..dc8ac93 100644
      extensions.initWithEGLStrings(eglVersion, eglExtensions);
  
      // The code assumes that ES2 or later is available if this extension is
-@@ -368,8 +359,8 @@ base::unique_fd SkiaGLRenderEngine::flushAndSubmit(SkiaGpuContext* context,
+@@ -326,7 +317,7 @@ bool SkiaGLRenderEngine::supportsFastRotatedClipRRectAA() const {
+ bool SkiaGLRenderEngine::supportsForwardPixelKill() const {
+     // ARM gpu support this since 2013
+     constexpr std::string kArm = "ARM";
+-    return GLExtensions::getInstance().getVendor() == kArm;
++    return gl::GLExtensions::getInstance().getVendor() == kArm;
+ }
+ bool SkiaGLRenderEngine::supportsProtectedContentImpl() const {
+     return mProtectedEGLContext != EGL_NO_CONTEXT;
+@@ -377,8 +368,8 @@ base::unique_fd SkiaGLRenderEngine::flushAndSubmit(SkiaGpuContext* context,
  }
  
  bool SkiaGLRenderEngine::waitGpuFence(base::borrowed_fd fenceFd) {
@@ -7113,7 +7108,7 @@ index acbb07c..dc8ac93 100644
          return false;
      }
  
-@@ -404,7 +395,7 @@ bool SkiaGLRenderEngine::waitGpuFence(base::borrowed_fd fenceFd) {
+@@ -413,7 +404,7 @@ bool SkiaGLRenderEngine::waitGpuFence(base::borrowed_fd fenceFd) {
  
  base::unique_fd SkiaGLRenderEngine::flushGL() {
      SFTRACE_CALL();
@@ -7122,7 +7117,7 @@ index acbb07c..dc8ac93 100644
          return base::unique_fd();
      }
  
-@@ -495,13 +486,13 @@ EGLContext SkiaGLRenderEngine::createEglContext(EGLDisplay display, EGLConfig co
+@@ -504,13 +495,13 @@ EGLContext SkiaGLRenderEngine::createEglContext(EGLDisplay display, EGLConfig co
  
  std::optional<RenderEngine::ContextPriority> SkiaGLRenderEngine::createContextPriority(
          const RenderEngineCreationArgs& args) {
@@ -7132,28 +7127,28 @@ index acbb07c..dc8ac93 100644
      }
  
      switch (args.contextPriority) {
-         case RenderEngine::ContextPriority::REALTIME:
+         case RenderEngine::ContextPriority::Realtime:
 -            if (GLExtensions::getInstance().hasRealtimePriority()) {
 +            if (gl::GLExtensions::getInstance().hasRealtimePriority()) {
-                 return RenderEngine::ContextPriority::REALTIME;
+                 return RenderEngine::ContextPriority::Realtime;
              } else {
                  ALOGI("Realtime priority unsupported, degrading gracefully to high priority");
-@@ -545,8 +536,8 @@ int SkiaGLRenderEngine::getContextPriority() {
+@@ -554,8 +545,8 @@ int SkiaGLRenderEngine::getContextPriority() {
  }
  
  void SkiaGLRenderEngine::appendBackendSpecificInfoToDump(std::string& result) {
 -    const GLExtensions& extensions = GLExtensions::getInstance();
 -    StringAppendF(&result, "\n ------------RE GLES (Ganesh)------------\n");
 +    const gl::GLExtensions& extensions = gl::GLExtensions::getInstance();
-+    StringAppendF(&result, "\n ------------RE GLES------------\n");
++    StringAppendF(&result, "\n ------------RE GLES (legacy GLES)------------\n");
      StringAppendF(&result, "EGL implementation : %s\n", extensions.getEGLVersion());
      StringAppendF(&result, "%s\n", extensions.getEGLExtensions());
      StringAppendF(&result, "GLES: %s, %s, %s\n", extensions.getVendor(), extensions.getRenderer(),
 diff --git a/libs/renderengine/skia/SkiaRenderEngine.h b/libs/renderengine/skia/SkiaRenderEngine.h
-index 269a5f0..04df4c1 100644
+index 8c88a3d..cdc7c59 100644
 --- a/libs/renderengine/skia/SkiaRenderEngine.h
 +++ b/libs/renderengine/skia/SkiaRenderEngine.h
-@@ -67,6 +67,7 @@ public:
+@@ -69,6 +69,7 @@ public:
  
      std::future<void> primeCache(PrimeCacheConfig config) override;
      void cleanupPostRender() override final;
@@ -7185,7 +7180,7 @@ index 8b95e6e..231dccd 100644
      size_t size = 20;
      EXPECT_CALL(*mRenderEngine, getMaxTextureSize()).WillOnce(Return(size));
 diff --git a/libs/renderengine/threaded/RenderEngineThreaded.cpp b/libs/renderengine/threaded/RenderEngineThreaded.cpp
-index 3f6f740..6fd0aad 100644
+index ff052ab..a04709a 100644
 --- a/libs/renderengine/threaded/RenderEngineThreaded.cpp
 +++ b/libs/renderengine/threaded/RenderEngineThreaded.cpp
 @@ -14,7 +14,7 @@
@@ -7197,7 +7192,7 @@ index 3f6f740..6fd0aad 100644
  
  #include "RenderEngineThreaded.h"
  
-@@ -28,6 +28,8 @@
+@@ -30,6 +30,8 @@
  #include <private/gui/SyncFeatures.h>
  #include <processgroup/processgroup.h>
  
@@ -7206,7 +7201,7 @@ index 3f6f740..6fd0aad 100644
  using namespace std::chrono_literals;
  
  namespace android {
-@@ -176,15 +178,43 @@ void RenderEngineThreaded::dump(std::string& result) {
+@@ -188,15 +190,43 @@ void RenderEngineThreaded::dump(std::string& result) {
  }
  
  void RenderEngineThreaded::genTextures(size_t count, uint32_t* names) {
@@ -7254,7 +7249,7 @@ index 3f6f740..6fd0aad 100644
  }
  
  void RenderEngineThreaded::mapExternalTextureBuffer(const sp<GraphicBuffer>& buffer,
-@@ -288,7 +318,7 @@ ftl::Future<FenceResult> RenderEngineThreaded::drawLayers(
+@@ -300,7 +330,7 @@ ftl::Future<FenceResult> RenderEngineThreaded::drawLayers(
                      SFTRACE_NAME("REThreaded::drawLayers");
                      instance.updateProtectedContext(layers, {buffer.get()});
                      instance.drawLayersInternal(std::move(resultPromise), display, layers, buffer,
@@ -7263,7 +7258,7 @@ index 3f6f740..6fd0aad 100644
                  });
      }
      mCondition.notify_one();
-@@ -319,6 +349,20 @@ ftl::Future<FenceResult> RenderEngineThreaded::tonemapAndDrawGainmap(
+@@ -331,6 +361,20 @@ ftl::Future<FenceResult> RenderEngineThreaded::tonemapAndDrawGainmap(
      return resultFuture;
  }
  
@@ -7285,7 +7280,7 @@ index 3f6f740..6fd0aad 100644
      std::promise<int> resultPromise;
      std::future<int> resultFuture = resultPromise.get_future();
 diff --git a/libs/renderengine/threaded/RenderEngineThreaded.h b/libs/renderengine/threaded/RenderEngineThreaded.h
-index 1ce3ebc..197dc17 100644
+index 0e3ebec..49f315a 100644
 --- a/libs/renderengine/threaded/RenderEngineThreaded.h
 +++ b/libs/renderengine/threaded/RenderEngineThreaded.h
 @@ -63,6 +63,7 @@ public:
@@ -7297,10 +7292,10 @@ index 1ce3ebc..197dc17 100644
      bool supportsBackgroundBlur() override;
      void onActiveDisplaySizeChanged(ui::Size size) override;
 diff --git a/services/surfaceflinger/Layer.cpp b/services/surfaceflinger/Layer.cpp
-index d2fa8ee..b529e9d 100644
+index e94912d..318eb18 100644
 --- a/services/surfaceflinger/Layer.cpp
 +++ b/services/surfaceflinger/Layer.cpp
-@@ -135,8 +135,8 @@ Layer::Layer(const surfaceflinger::LayerCreationArgs& args)
+@@ -134,8 +134,8 @@ Layer::Layer(const surfaceflinger::LayerCreationArgs& args)
          mFlinger(sp<SurfaceFlinger>::fromExisting(args.flinger)),
          mName(base::StringPrintf("%s#%d", args.name.c_str(), sequence)),
          mWindowType(static_cast<WindowInfo::Type>(
@@ -7311,7 +7306,7 @@ index d2fa8ee..b529e9d 100644
      ALOGV("Creating Layer %s", getDebugName());
  
      mDrawingState.crop = {0, 0, -1, -1};
-@@ -163,8 +163,6 @@ Layer::Layer(const surfaceflinger::LayerCreationArgs& args)
+@@ -162,8 +162,6 @@ Layer::Layer(const surfaceflinger::LayerCreationArgs& args)
      mPotentialCursor = args.flags & ISurfaceComposerClient::eCursorWindow;
      mLayerFEs.emplace_back(frontend::LayerHierarchy::TraversalPath{static_cast<uint32_t>(sequence)},
                             args.flinger->getFactory().createLayerFE(mName, this));
@@ -7320,7 +7315,7 @@ index d2fa8ee..b529e9d 100644
  }
  
  void Layer::onFirstRef() {
-@@ -180,13 +178,7 @@ Layer::~Layer() {
+@@ -179,13 +177,7 @@ Layer::~Layer() {
                                    mBufferInfo.mBuffer->getBuffer(), mBufferInfo.mFrameNumber,
                                    mBufferInfo.mFence);
      }
@@ -7336,7 +7331,7 @@ index d2fa8ee..b529e9d 100644
      mFlinger->mTimeStats->onDestroy(layerId);
      mFlinger->mFrameTracer->onDestroy(layerId);
 diff --git a/services/surfaceflinger/Layer.h b/services/surfaceflinger/Layer.h
-index ff1c19f..60beb56 100644
+index 94d5b00..242a051 100644
 --- a/services/surfaceflinger/Layer.h
 +++ b/services/surfaceflinger/Layer.h
 @@ -25,6 +25,8 @@
@@ -7349,7 +7344,7 @@ index ff1c19f..60beb56 100644
  #include <ui/BlurRegion.h>
  #include <ui/DisplayMap.h>
 diff --git a/services/surfaceflinger/SurfaceFlinger.cpp b/services/surfaceflinger/SurfaceFlinger.cpp
-index c95ca8c..1438373 100644
+index 17e8e1b..c8a3e00 100644
 --- a/services/surfaceflinger/SurfaceFlinger.cpp
 +++ b/services/surfaceflinger/SurfaceFlinger.cpp
 @@ -20,7 +20,8 @@
@@ -7362,7 +7357,7 @@ index c95ca8c..1438373 100644
  
  #include "SurfaceFlinger.h"
  
-@@ -851,7 +852,7 @@ uint32_t SurfaceFlinger::getNewTexture() {
+@@ -891,7 +892,7 @@ uint32_t SurfaceFlinger::getNewTexture() {
          if (!mTexturePool.empty()) {
              uint32_t name = mTexturePool.back();
              mTexturePool.pop_back();
@@ -7371,7 +7366,7 @@ index c95ca8c..1438373 100644
              return name;
          }
  
-@@ -878,7 +879,7 @@ void SurfaceFlinger::deleteTextureAsync(uint32_t texture) {
+@@ -918,7 +919,7 @@ void SurfaceFlinger::deleteTextureAsync(uint32_t texture) {
      // We don't change the pool size, so the fix-up logic in postComposition will decide whether
      // to actually delete this or not based on mTexturePoolSize
      mTexturePool.push_back(texture);
@@ -7380,7 +7375,7 @@ index c95ca8c..1438373 100644
  }
  
  void chooseRenderEngineType(renderengine::RenderEngineCreationArgs::Builder& builder) {
-@@ -3609,13 +3610,13 @@ void SurfaceFlinger::onCompositionPresented(PhysicalDisplayId pacesetterId,
+@@ -3874,13 +3875,13 @@ void SurfaceFlinger::onCompositionPresented(PhysicalDisplayId pacesetterId,
              const size_t offset = mTexturePool.size();
              mTexturePool.resize(mTexturePoolSize);
              getRenderEngine().genTextures(refillCount, mTexturePool.data() + offset);
@@ -7396,7 +7391,7 @@ index c95ca8c..1438373 100644
          }
      }
  
-@@ -4259,6 +4260,8 @@ void SurfaceFlinger::processDisplayChanged(const wp<IBinder>& displayToken,
+@@ -4547,6 +4548,8 @@ void SurfaceFlinger::processDisplayChanged(const wp<IBinder>& displayToken,
  
      // Recreate the DisplayDevice if the surface or sequence ID changed.
      if (currentBinder != drawingBinder || currentState.sequenceId != drawingState.sequenceId) {
@@ -7406,7 +7401,7 @@ index c95ca8c..1438373 100644
              display->disconnect();
              if (const auto virtualDisplayIdVariant = display->getVirtualDisplayIdVariant()) {
 diff --git a/services/surfaceflinger/tests/unittests/CompositionTest.cpp b/services/surfaceflinger/tests/unittests/CompositionTest.cpp
-index 07d3a12..fde2338 100644
+index 4f553d9..bff9d23 100644
 --- a/services/surfaceflinger/tests/unittests/CompositionTest.cpp
 +++ b/services/surfaceflinger/tests/unittests/CompositionTest.cpp
 @@ -32,6 +32,8 @@
