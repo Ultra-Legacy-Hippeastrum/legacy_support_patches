@@ -5,10 +5,7 @@ git am --signoff < ~/nexus5-patches/bionic/0001-linker-partially-allow-text-relo
 cd ../device/lineage/sepolicy
 echo "Applying patches to device/lineage/sepolicy"
 git am --signoff < ~/nexus5-patches/device_lineage_sepolicy/0001-vendor_hal_soter-comment-out.patch
-cd ../../../frameworks/av
-git am --signoff < ~/nexus5-patches/frameworks_av/0001-Revert-Remove-source-code-of-all-the-OMX-software-co.patch
-git am --signoff < ~/nexus5-patches/frameworks_av/0002-Revert-Disable-building-software-OMX-codecs.patch
-cd ../base
+cd ../../../frameworks/base
 echo "Applying patches to frameworks/base"
 git am --signoff < ~/nexus5-patches/frameworks_base/0001-Disable-fs-verity-as-3.18-doesn-t-support-it.patch
 git am --signoff < ~/nexus5-patches/frameworks_base/0002-Ignore-cgroup-creation-errors.patch
