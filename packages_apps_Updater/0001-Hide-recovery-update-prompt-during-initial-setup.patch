@@ -1,4 +1,4 @@
-From e635a1996f80e84bda331484d1a4e04bb1fa9f10 Mon Sep 17 00:00:00 2001
+From d84faa09a05d7b3ac3860837804c58e0a7f69783 Mon Sep 17 00:00:00 2001
 From: Yaroslav Zviezda <acroreiser@gmail.com>
 Date: Sun, 10 May 2026 09:03:55 -0400
 Subject: [PATCH] Hide recovery update prompt during initial setup
@@ -11,11 +11,11 @@ Change-Id: I09358f46410c3a0c7372662257f7867bc1efa861
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/app/src/main/res/values/config.xml b/app/src/main/res/values/config.xml
-index 76ab686..60f7977 100644
+index 4c01fb3..98d5fa3 100644
 --- a/app/src/main/res/values/config.xml
 +++ b/app/src/main/res/values/config.xml
-@@ -15,5 +15,5 @@
-      limitations under the License.
+@@ -4,5 +4,5 @@
+      SPDX-License-Identifier: Apache-2.0
  -->
  <resources>
 -    <bool name="config_hideRecoveryUpdate">false</bool>
