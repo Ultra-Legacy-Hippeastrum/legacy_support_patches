@@ -1,0 +1,64 @@
+From 51f09e366a788409616175335ed78a98a3eaa028 Mon Sep 17 00:00:00 2001
+From: Yaroslav Zviezda <acroreiser@gmail.com>
+Date: Sat, 30 May 2026 17:11:35 -0400
+Subject: [PATCH 2/2] Revert "Disable building software OMX codecs"
+
+This reverts commit 60ea1ce6e8f5e8b258e15a2f7eaf10b9563e8614.
+---
+ media/libstagefright/omx/Android.bp |  3 ---
+ services/mediacodec/Android.bp      | 25 +++++++++++++++++++++++++
+ 2 files changed, 25 insertions(+), 3 deletions(-)
+
+diff --git a/media/libstagefright/omx/Android.bp b/media/libstagefright/omx/Android.bp
+index c7d5a1f..afd818e 100644
+--- a/media/libstagefright/omx/Android.bp
++++ b/media/libstagefright/omx/Android.bp
+@@ -182,9 +182,6 @@ cc_library_shared {
+ 
+ cc_defaults {
+     name: "libstagefright_softomx-defaults",
+-    // TODO (b/316432618) Software OMX codecs are no longer used, disable building them till
+-    // this code is removed completely.
+-    enabled: false,
+     vendor_available: true,
+ 
+     cflags: [
+diff --git a/services/mediacodec/Android.bp b/services/mediacodec/Android.bp
+index 4b69409..d6b6960 100644
+--- a/services/mediacodec/Android.bp
++++ b/services/mediacodec/Android.bp
+@@ -96,6 +96,31 @@ cc_binary {
+         "android.hidl.memory@1.0",
+     ],
+ 
++    runtime_libs: [
++        "libstagefright_soft_aacdec",
++        "libstagefright_soft_aacenc",
++        "libstagefright_soft_amrdec",
++        "libstagefright_soft_amrnbenc",
++        "libstagefright_soft_amrwbenc",
++        "libstagefright_soft_avcdec",
++        "libstagefright_soft_avcenc",
++        "libstagefright_soft_flacdec",
++        "libstagefright_soft_flacenc",
++        "libstagefright_soft_g711dec",
++        "libstagefright_soft_gsmdec",
++        "libstagefright_soft_hevcdec",
++        "libstagefright_soft_mp3dec",
++        "libstagefright_soft_mpeg2dec",
++        "libstagefright_soft_mpeg4dec",
++        "libstagefright_soft_mpeg4enc",
++        "libstagefright_soft_opusdec",
++        "libstagefright_soft_rawdec",
++        "libstagefright_soft_vorbisdec",
++        "libstagefright_soft_vpxdec",
++        "libstagefright_soft_vpxenc",
++        "libstagefright_softomx_plugin",
++    ],
++
+     // OMX interfaces force this to stay in 32-bit mode;
+     compile_multilib: "32",
+ 
+-- 
+2.53.0
+
