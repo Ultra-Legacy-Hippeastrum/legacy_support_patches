@@ -1,0 +1,64 @@
+From 53abc9815bf628cc498b6cd9c78223c532a25c50 Mon Sep 17 00:00:00 2001
+From: CakesTwix <oleg.kiryazov@gmail.com>
+Date: Sat, 27 Jun 2026 13:14:12 -0400
+Subject: [PATCH] omx: suppress unused-but-set-variable
+
+Change-Id: I2a5c020d24a2374052ac5d9d9f7b1c5a6e94bce7
+---
+ media/libstagefright/codecs/avcdec/Android.bp   | 1 +
+ media/libstagefright/codecs/avcenc/Android.bp   | 1 +
+ media/libstagefright/codecs/hevcdec/Android.bp  | 1 +
+ media/libstagefright/codecs/mpeg2dec/Android.bp | 1 +
+ 4 files changed, 4 insertions(+)
+
+diff --git a/media/libstagefright/codecs/avcdec/Android.bp b/media/libstagefright/codecs/avcdec/Android.bp
+index 1c2f9beb00..1b9b84f076 100644
+--- a/media/libstagefright/codecs/avcdec/Android.bp
++++ b/media/libstagefright/codecs/avcdec/Android.bp
+@@ -16,6 +16,7 @@ cc_library_shared {
+ 
+     cflags: [
+         "-Wall",
++        "-Wno-unused-but-set-variable",
+     ],
+ 
+     version_script: "exports.lds",
+diff --git a/media/libstagefright/codecs/avcenc/Android.bp b/media/libstagefright/codecs/avcenc/Android.bp
+index 586088c6f1..ccf66210ee 100644
+--- a/media/libstagefright/codecs/avcenc/Android.bp
++++ b/media/libstagefright/codecs/avcenc/Android.bp
+@@ -27,6 +27,7 @@ cc_library_shared {
+     cflags: [
+         "-Wall",
+         "-Wno-unused-variable",
++        "-Wno-unused-but-set-variable",
+     ],
+     ldflags: ["-Wl,-Bsymbolic"],
+ 
+diff --git a/media/libstagefright/codecs/hevcdec/Android.bp b/media/libstagefright/codecs/hevcdec/Android.bp
+index 2c4091bcf3..21bc5f5b12 100644
+--- a/media/libstagefright/codecs/hevcdec/Android.bp
++++ b/media/libstagefright/codecs/hevcdec/Android.bp
+@@ -17,6 +17,7 @@ cc_library_shared {
+     cflags: [
+         "-Wall",
+         "-Wno-unused-variable",
++        "-Wno-unused-but-set-variable",
+     ],
+ 
+     version_script: "exports.lds",
+diff --git a/media/libstagefright/codecs/mpeg2dec/Android.bp b/media/libstagefright/codecs/mpeg2dec/Android.bp
+index abd1379c9d..fc3a41d520 100644
+--- a/media/libstagefright/codecs/mpeg2dec/Android.bp
++++ b/media/libstagefright/codecs/mpeg2dec/Android.bp
+@@ -17,6 +17,7 @@ cc_library_shared {
+     cflags: [
+         "-Wall",
+         "-Wno-unused-variable",
++        "-Wno-unused-but-set-variable",
+     ],
+ 
+     version_script: "exports.lds",
+-- 
+2.47.3
+

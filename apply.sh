@@ -1,4 +1,5 @@
 #!/bin/bash
+
 cd bionic
 echo "Applying patches to bionic"
 git am --signoff < ~/nexus5-patches/bionic/0001-linker-partially-allow-text-relocations.patch
@@ -8,6 +9,7 @@ git am --signoff < ~/nexus5-patches/device_lineage_sepolicy/0001-vendor_hal_sote
 cd ../../../frameworks/av
 git am --signoff < ~/nexus5-patches/frameworks_av/0001-Revert-Remove-source-code-of-all-the-OMX-software-co.patch
 git am --signoff < ~/nexus5-patches/frameworks_av/0002-Revert-Disable-building-software-OMX-codecs.patch
+git am --signoff < ~/nexus5-patches/frameworks_av/0003-omx-suppress-unused-but-set-variable.patch
 cd ../base
 echo "Applying patches to frameworks/base"
 git am --signoff < ~/nexus5-patches/frameworks_base/0001-Disable-fs-verity-as-3.18-doesn-t-support-it.patch
