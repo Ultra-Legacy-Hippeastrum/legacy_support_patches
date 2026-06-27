@@ -38,9 +38,6 @@ git am --signoff < ~/nexus5-patches/hardware_qcom-caf_common/0002-QCOM-Bring-bac
 cd ../../ril
 echo "Applying patches to hardware/ril"
 git am --signoff < ~/nexus5-patches/hardware_ril/0001-libril-Restore-support-for-RIL-v6-v8-and-v9-stacks.patch
-cd ../../packages/apps/Launcher3
-echo "Applying patches to packages/apps/Launcher3"
-git am --signoff < ~/nexus5-patches/packages_apps_Launcher3/0001-launcher3-Nuke-Go-support.patch
 cd ../Updater
 echo "Applying patches to packages/apps/Updater"
 git am --signoff < ~/nexus5-patches/packages_apps_Updater/0001-Hide-recovery-update-prompt-during-initial-setup.patch
@@ -63,7 +60,4 @@ git am --signoff < ~/nexus5-patches/system_sepolicy/0001-sepolicy-allow-su-domai
 cd ../tools/mkbootimg
 echo "Applying patches to system/tools/mkbootimg"
 git am --signoff < ~/nexus5-patches/system_tools_mkbootimg/0001-mkbootimg-add-support-for-dt.patch
-cd ../../../vendor/lineage
-echo "Applying patches to vendor/lineage"
-git am --signoff < ~/nexus5-patches/vendor_lineage/0001-config-Nuke-Go-support.patch
 cd ../../
