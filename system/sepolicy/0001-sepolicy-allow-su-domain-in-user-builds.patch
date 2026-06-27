@@ -1,4 +1,4 @@
-From b96ff93fdfd018c1fd01ae44ed3a42587b706496 Mon Sep 17 00:00:00 2001
+From b5b738fb7acfce518b079f5af42301370efc09ae Mon Sep 17 00:00:00 2001
 From: Yaroslav Zviezda <acroreiser@gmail.com>
 Date: Wed, 29 Dec 2021 11:41:03 +0300
 Subject: [PATCH] sepolicy: allow su domain in user builds
@@ -27,7 +27,7 @@ Change-Id: I3ac61e9e3e9741d512ece95c86a8e7ee1617a926
  17 files changed, 39 insertions(+), 58 deletions(-)
 
 diff --git a/build/soong/policy.go b/build/soong/policy.go
-index 23ff255..c34eb81 100644
+index 8359acd92..e3a5659ec 100644
 --- a/build/soong/policy.go
 +++ b/build/soong/policy.go
 @@ -558,7 +558,7 @@ func (c *policyBinary) GenerateAndroidBuildActions(ctx android.ModuleContext) {
@@ -49,7 +49,7 @@ index 23ff255..c34eb81 100644
  
  	out := pathForModuleOut(ctx, c.stem())
 diff --git a/prebuilts/api/202404/private/init.te b/prebuilts/api/202404/private/init.te
-index 9d3a2c3..f34d166 100644
+index 9d3a2c380..f34d166ab 100644
 --- a/prebuilts/api/202404/private/init.te
 +++ b/prebuilts/api/202404/private/init.te
 @@ -28,13 +28,13 @@ domain_trans(init, { rootfs toolbox_exec }, modprobe)
@@ -72,7 +72,7 @@ index 9d3a2c3..f34d166 100644
  # This is useful in case of remounting ext4 userdata into checkpointing mode,
  # since it potentially requires tearing down dm-devices (e.g. dm-bow, dm-crypto)
 diff --git a/prebuilts/api/202404/private/su.te b/prebuilts/api/202404/private/su.te
-index 2e0d10a..5b5cd3d 100644
+index 2e0d10ae8..5b5cd3d71 100644
 --- a/prebuilts/api/202404/private/su.te
 +++ b/prebuilts/api/202404/private/su.te
 @@ -1,4 +1,3 @@
@@ -86,7 +86,7 @@ index 2e0d10a..5b5cd3d 100644
    set_prop(su, permissive_mte_prop);
 -')
 diff --git a/prebuilts/api/202504/private/init.te b/prebuilts/api/202504/private/init.te
-index 6f0ee80..ee900f8 100644
+index 6f0ee8001..ee900f8f6 100644
 --- a/prebuilts/api/202504/private/init.te
 +++ b/prebuilts/api/202504/private/init.te
 @@ -28,12 +28,11 @@ domain_trans(init, { rootfs toolbox_exec }, modprobe)
@@ -104,7 +104,7 @@ index 6f0ee80..ee900f8 100644
  # Allow init to figure out name of dm-device from it's /dev/block/dm-XX path.
  # This is useful in case of remounting ext4 userdata into checkpointing mode,
 diff --git a/prebuilts/api/202504/private/su.te b/prebuilts/api/202504/private/su.te
-index 247fd0b..a02100c 100644
+index 247fd0b72..a02100c4b 100644
 --- a/prebuilts/api/202504/private/su.te
 +++ b/prebuilts/api/202504/private/su.te
 @@ -1,4 +1,3 @@
@@ -119,7 +119,7 @@ index 247fd0b..a02100c 100644
 -')
 +
 diff --git a/prebuilts/api/30.0/private/init.te b/prebuilts/api/30.0/private/init.te
-index b0e7f80..e40b159 100644
+index b0e7f809a..e40b15928 100644
 --- a/prebuilts/api/30.0/private/init.te
 +++ b/prebuilts/api/30.0/private/init.te
 @@ -24,13 +24,13 @@ domain_trans(init, { rootfs toolbox_exec }, modprobe)
@@ -142,7 +142,7 @@ index b0e7f80..e40b159 100644
  # This is useful in case of remounting ext4 userdata into checkpointing mode,
  # since it potentially requires tearing down dm-devices (e.g. dm-bow, dm-crypto)
 diff --git a/prebuilts/api/30.0/private/su.te b/prebuilts/api/30.0/private/su.te
-index 16e47bb..8ed6ee8 100644
+index 16e47bbbf..8ed6ee8c4 100644
 --- a/prebuilts/api/30.0/private/su.te
 +++ b/prebuilts/api/30.0/private/su.te
 @@ -1,4 +1,3 @@
@@ -156,7 +156,7 @@ index 16e47bb..8ed6ee8 100644
    app_domain(su)
 -')
 diff --git a/prebuilts/api/31.0/private/init.te b/prebuilts/api/31.0/private/init.te
-index f569e0c..7eac8d7 100644
+index f569e0c2d..7eac8d726 100644
 --- a/prebuilts/api/31.0/private/init.te
 +++ b/prebuilts/api/31.0/private/init.te
 @@ -25,13 +25,13 @@ domain_trans(init, { rootfs toolbox_exec }, modprobe)
@@ -179,7 +179,7 @@ index f569e0c..7eac8d7 100644
  # This is useful in case of remounting ext4 userdata into checkpointing mode,
  # since it potentially requires tearing down dm-devices (e.g. dm-bow, dm-crypto)
 diff --git a/prebuilts/api/31.0/private/su.te b/prebuilts/api/31.0/private/su.te
-index 587f449..73e8944 100644
+index 587f449fb..73e894454 100644
 --- a/prebuilts/api/31.0/private/su.te
 +++ b/prebuilts/api/31.0/private/su.te
 @@ -1,4 +1,3 @@
@@ -194,7 +194,7 @@ index 587f449..73e8944 100644
 -
 -')
 diff --git a/prebuilts/api/32.0/private/init.te b/prebuilts/api/32.0/private/init.te
-index 200780d..2361044 100644
+index 200780dfb..23610448a 100644
 --- a/prebuilts/api/32.0/private/init.te
 +++ b/prebuilts/api/32.0/private/init.te
 @@ -25,13 +25,13 @@ domain_trans(init, { rootfs toolbox_exec }, modprobe)
@@ -217,7 +217,7 @@ index 200780d..2361044 100644
  # This is useful in case of remounting ext4 userdata into checkpointing mode,
  # since it potentially requires tearing down dm-devices (e.g. dm-bow, dm-crypto)
 diff --git a/prebuilts/api/32.0/private/su.te b/prebuilts/api/32.0/private/su.te
-index 587f449..73e8944 100644
+index 587f449fb..73e894454 100644
 --- a/prebuilts/api/32.0/private/su.te
 +++ b/prebuilts/api/32.0/private/su.te
 @@ -1,4 +1,3 @@
@@ -232,7 +232,7 @@ index 587f449..73e8944 100644
 -
 -')
 diff --git a/prebuilts/api/33.0/private/init.te b/prebuilts/api/33.0/private/init.te
-index 17e25f8..c738473 100644
+index 17e25f895..c73847378 100644
 --- a/prebuilts/api/33.0/private/init.te
 +++ b/prebuilts/api/33.0/private/init.te
 @@ -26,13 +26,13 @@ domain_trans(init, { rootfs toolbox_exec }, modprobe)
@@ -255,7 +255,7 @@ index 17e25f8..c738473 100644
  # This is useful in case of remounting ext4 userdata into checkpointing mode,
  # since it potentially requires tearing down dm-devices (e.g. dm-bow, dm-crypto)
 diff --git a/prebuilts/api/33.0/private/su.te b/prebuilts/api/33.0/private/su.te
-index 587f449..73e8944 100644
+index 587f449fb..73e894454 100644
 --- a/prebuilts/api/33.0/private/su.te
 +++ b/prebuilts/api/33.0/private/su.te
 @@ -1,4 +1,3 @@
@@ -270,7 +270,7 @@ index 587f449..73e8944 100644
 -
 -')
 diff --git a/prebuilts/api/34.0/private/init.te b/prebuilts/api/34.0/private/init.te
-index 9d3a2c3..f34d166 100644
+index 9d3a2c380..f34d166ab 100644
 --- a/prebuilts/api/34.0/private/init.te
 +++ b/prebuilts/api/34.0/private/init.te
 @@ -28,13 +28,13 @@ domain_trans(init, { rootfs toolbox_exec }, modprobe)
@@ -293,26 +293,21 @@ index 9d3a2c3..f34d166 100644
  # This is useful in case of remounting ext4 userdata into checkpointing mode,
  # since it potentially requires tearing down dm-devices (e.g. dm-bow, dm-crypto)
 diff --git a/prebuilts/api/34.0/private/su.te b/prebuilts/api/34.0/private/su.te
-index bac0ae0..fcb9822 100644
+index cc00e103b..7c99a0ba5 100644
 --- a/prebuilts/api/34.0/private/su.te
 +++ b/prebuilts/api/34.0/private/su.te
-@@ -1,6 +1,5 @@
- typeattribute su coredomain;
- 
+@@ -1,4 +1,3 @@
 -userdebug_or_eng(`
+   typeattribute su coredomain;
+ 
    domain_auto_trans(shell, su_exec, su)
-   # Allow dumpstate to call su on userdebug / eng builds to collect
-   # additional information.
-@@ -29,7 +28,6 @@ userdebug_or_eng(`
+@@ -32,4 +31,3 @@ userdebug_or_eng(`
  
    # Allow root to set MTE permissive mode.
    set_prop(su, permissive_mte_prop);
 -')
- 
- # su is also permissive to permit setenforce.
- permissive su;
 diff --git a/private/init.te b/private/init.te
-index 31c4103..eb96c66 100644
+index 31c4103bf..eb96c6610 100644
 --- a/private/init.te
 +++ b/private/init.te
 @@ -28,13 +28,13 @@ domain_trans(init, { rootfs toolbox_exec }, modprobe)
@@ -335,24 +330,19 @@ index 31c4103..eb96c66 100644
  # This is useful in case of remounting ext4 userdata into checkpointing mode,
  # since it potentially requires tearing down dm-devices (e.g. dm-bow, dm-crypto)
 diff --git a/private/su.te b/private/su.te
-index 690f305..7902dbf 100644
+index fae9b987e..dc5529a65 100644
 --- a/private/su.te
 +++ b/private/su.te
-@@ -1,6 +1,5 @@
- typeattribute su coredomain;
- 
+@@ -1,4 +1,3 @@
 -userdebug_or_eng(`
+   typeattribute su coredomain;
+ 
    domain_auto_trans(shell, su_exec, su)
-   # Allow dumpstate to call su on userdebug / eng builds to collect
-   # additional information.
-@@ -131,7 +130,6 @@ userdebug_or_eng(`
+@@ -134,4 +133,3 @@ userdebug_or_eng(`
    typeattribute su hal_wifi_client;
    typeattribute su hal_wifi_hostapd_client;
    typeattribute su hal_wifi_supplicant_client;
 -')
- 
- # su is also permissive to permit setenforce.
- permissive su;
 -- 
-2.53.0
+2.47.3
 

@@ -1,18 +1,13 @@
-# LG Nexus 5 patches for crDroid 12
-You must apply all of the patches in this repository in order for proper building and booting. 
+These patches are required for legacy devices to boot and function properly. 
 
-Only validated to work on crDroid 12.4 (as of Mar 2025)
+Usage:
 
-Extract files to ~/nexus5-patches. Copy apply.sh to the root of your crDroid 12 sources.
+  1. clone current stable LineageOS source code (lineage-23.2)
+  2. clone https://github.com/Ultra-Legacy-Hippeastrum/legacy_support_patches to the root of your LineageOS source tree. You must use the same branch as target LineageOS branch (lineage-23.2)
+  3. cd to the root of your LineageOS source tree and run 'chmod +x ./legacy_support_patches/apply.sh'
+  4. then run './legacy_support_patches/apply.sh'
 
-Mark apply.sh as executable
+NOTE: THESE PATCHES DO NOT COVER BPF-LESS DEVICES!
+If your kernel BPF level is lower than 5.4 additionally try to apply bpf patches from https://github.com/MisterZtr/LineageOS_gsi/tree/lineage-23.2/patches/trebledroid
 
-```
-sudo chmod +x apply.sh
-```
-
-Then run the apply.sh script. It should apply all of the patches you need
-
-These patches are required because we are on an old kernel version and we are reliant on several legacy HALs. Certain things need to be bypassed in order to get it booting at all, and more to get everything (such as the camera) working.
-
-Thanks to @fakemanoan for the script and README, and thanks to @Ultra-Legacy-Hippeastrum for all of the patches (except for launcher3 and vendor/lineage, i did those patches)
+Thanks to Lost-Entrepreneur439 for an idea and formatting current patches.
