@@ -58,10 +58,11 @@ apply_patches_for() {
 
 apply_patches_for bionic
 apply_patches_for device/lineage/sepolicy
-apply_patches_for frameworks/av 
+apply_patches_for frameworks/av
 apply_patches_for frameworks/base
 apply_patches_for frameworks/native
 apply_patches_for hardware/broadcom/wlan
+apply_patches_for hardware/libhardware
 apply_patches_for hardware/qcom-caf/common
 apply_patches_for hardware/ril
 apply_patches_for packages/modules/Connectivity
