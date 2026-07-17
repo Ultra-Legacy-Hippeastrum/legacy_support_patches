@@ -1,0 +1,122 @@
+From f7c4199fc7018cd2325359d837b70185c81bf725 Mon Sep 17 00:00:00 2001
+From: Adithya R <gh0strider.2k18.reborn@gmail.com>
+Date: Sun, 9 Oct 2022 20:28:56 +0530
+Subject: [PATCH] SF: Bring back support for disabling backpressure propagation
+
+[Pulkit077]: Adapt to A14 QPR1
+[SamarV-121]: Adapt to A14 QPR3
+[acroreiser]: Adapt to A16 QPR2
+
+Taken from CLO (QSSI 13). Some Qualcomm devices can still
+benefit from disabling backpressure propagation by setting:
+
+debug.sf.disable_backpressure=1
+
+Change-Id: I669a6059a2a971aa79603e74153fa93729f703dc
+Signed-off-by: Pulkit077 <pulkitagarwal2k1@gmail.com>
+---
+ .../Scheduler/include/scheduler/Features.h               | 1 +
+ .../Scheduler/include/scheduler/FrameTargeter.h          | 4 +++-
+ services/surfaceflinger/Scheduler/src/FrameTargeter.cpp  | 4 ++--
+ services/surfaceflinger/SurfaceFlinger.cpp               | 9 ++++++++-
+ services/surfaceflinger/SurfaceFlinger.h                 | 1 +
+ 5 files changed, 15 insertions(+), 4 deletions(-)
+
+diff --git a/services/surfaceflinger/Scheduler/include/scheduler/Features.h b/services/surfaceflinger/Scheduler/include/scheduler/Features.h
+index 52485fb4e9..6a3d7d082f 100644
+--- a/services/surfaceflinger/Scheduler/include/scheduler/Features.h
++++ b/services/surfaceflinger/Scheduler/include/scheduler/Features.h
+@@ -30,6 +30,7 @@ enum class Feature : std::uint8_t {
+     kBackpressureGpuComposition = 1 << 4,
+     kSmallDirtyContentDetection = 1 << 5,
+     kExpectedPresentTime = 1 << 6,
++    kPropagateBackpressure = 1 << 7,
+ };
+ 
+ using FeatureFlags = ftl::Flags<Feature>;
+diff --git a/services/surfaceflinger/Scheduler/include/scheduler/FrameTargeter.h b/services/surfaceflinger/Scheduler/include/scheduler/FrameTargeter.h
+index 9f62bc9670..338a1fd790 100644
+--- a/services/surfaceflinger/Scheduler/include/scheduler/FrameTargeter.h
++++ b/services/surfaceflinger/Scheduler/include/scheduler/FrameTargeter.h
+@@ -127,7 +127,8 @@ public:
+     FrameTargeter(PhysicalDisplayId displayId, FeatureFlags flags)
+           : FrameTarget(to_string(displayId)),
+             mBackpressureGpuComposition(flags.test(Feature::kBackpressureGpuComposition)),
+-            mSupportsExpectedPresentTime(flags.test(Feature::kExpectedPresentTime)) {}
++            mSupportsExpectedPresentTime(flags.test(Feature::kExpectedPresentTime)),
++            mPropagateBackpressure(flags.test(Feature::kPropagateBackpressure)) {}
+ 
+     const FrameTarget& target() const { return *this; }
+ 
+@@ -169,6 +170,7 @@ private:
+ 
+     const bool mBackpressureGpuComposition;
+     const bool mSupportsExpectedPresentTime;
++    const bool mPropagateBackpressure;
+ 
+     TimePoint mScheduledPresentTime;
+     CompositionCoverageFlags mCompositionCoverage;
+diff --git a/services/surfaceflinger/Scheduler/src/FrameTargeter.cpp b/services/surfaceflinger/Scheduler/src/FrameTargeter.cpp
+index 15e7f8ca0e..d304615cb7 100644
+--- a/services/surfaceflinger/Scheduler/src/FrameTargeter.cpp
++++ b/services/surfaceflinger/Scheduler/src/FrameTargeter.cpp
+@@ -138,8 +138,8 @@ void FrameTargeter::beginFrame(const BeginFrameArgs& args, const IVsyncSource& v
+     // In cases where the present fence is about to fire, give it a small grace period instead of
+     // giving up on the frame.
+     const int graceTimeForPresentFenceMs = [&] {
+-        const bool considerBackpressure =
+-                mBackpressureGpuComposition || !mCompositionCoverage.test(CompositionCoverage::Gpu);
++        const bool considerBackpressure = mPropagateBackpressure &&
++                (mBackpressureGpuComposition || !mCompositionCoverage.test(CompositionCoverage::Gpu));
+ 
+         if (!wouldBackpressure || !considerBackpressure) {
+             return 0;
+diff --git a/services/surfaceflinger/SurfaceFlinger.cpp b/services/surfaceflinger/SurfaceFlinger.cpp
+index af2b4d225f..6360458638 100644
+--- a/services/surfaceflinger/SurfaceFlinger.cpp
++++ b/services/surfaceflinger/SurfaceFlinger.cpp
+@@ -531,6 +531,10 @@ SurfaceFlinger::SurfaceFlinger(Factory& factory) : SurfaceFlinger(factory, SkipI
+ 
+     mDebugFlashDelay = base::GetUintProperty("debug.sf.showupdates"s, 0u);
+ 
++    property_get("debug.sf.disable_backpressure", value, "0");
++    mPropagateBackpressure = !atoi(value);
++    ALOGI_IF(!mPropagateBackpressure, "Disabling backpressure propagation");
++
+     mBackpressureGpuComposition = base::GetBoolProperty("debug.sf.enable_gl_backpressure"s, true);
+     ALOGI_IF(mBackpressureGpuComposition, "Enabling backpressure for GPU composition");
+ 
+@@ -2939,7 +2943,7 @@ bool SurfaceFlinger::commit(PhysicalDisplayId pacesetterId,
+     }
+ 
+     if (pacesetterFrameTarget.wouldBackpressureHwc()) {
+-        if (mBackpressureGpuComposition || pacesetterFrameTarget.didMissHwcFrame()) {
++        if (mPropagateBackpressure && (mBackpressureGpuComposition || pacesetterFrameTarget.didMissHwcFrame())) {
+             mScheduler->getVsyncSchedule()->getTracker().onFrameMissed(
+                     pacesetterFrameTarget.expectedPresentTime());
+             const Duration slack = TimePoint::now() - pacesetterFrameTarget.frameBeginTime();
+@@ -5063,6 +5067,9 @@ void SurfaceFlinger::initScheduler(const sp<const DisplayDevice>& display) {
+     if (mBackpressureGpuComposition) {
+         features |= Feature::kBackpressureGpuComposition;
+     }
++    if (mPropagateBackpressure) {
++        features |= Feature::kPropagateBackpressure;
++    }
+     if (getHwComposer().getComposer()->isSupported(
+                 Hwc2::Composer::OptionalFeature::ExpectedPresentTime)) {
+         features |= Feature::kExpectedPresentTime;
+diff --git a/services/surfaceflinger/SurfaceFlinger.h b/services/surfaceflinger/SurfaceFlinger.h
+index 030e3e8297..04072acb0e 100644
+--- a/services/surfaceflinger/SurfaceFlinger.h
++++ b/services/surfaceflinger/SurfaceFlinger.h
+@@ -1518,6 +1518,7 @@ private:
+     std::atomic_bool mForceFullDamage = false;
+ 
+     bool mLayerCachingEnabled = false;
++    bool mPropagateBackpressure = true;
+     bool mBackpressureGpuComposition = false;
+ 
+     LayerTracing mLayerTracing;
+-- 
+2.47.3
+
