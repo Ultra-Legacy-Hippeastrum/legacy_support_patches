@@ -1,0 +1,142 @@
+From b1e3efda3c6b07449ff8a773b03b972ae4097d8f Mon Sep 17 00:00:00 2001
+From: Yaroslav Zviezda <acroreiser@gmail.com>
+Date: Fri, 21 Aug 2026 23:47:04 +0300
+Subject: [PATCH] eap: use APDU for SIM authentication
+
+Nexus 5 RIL fails on RIL_REQUEST_SIM_AUTHENTICATION...
+
+IPsec counterpart of https://github.com/acroreiser/ims/commit/ab3b66ba3224df456cf07702ec5de41b7684aeb3
+
+Assisted-by: Gemini <gemini@google.com>
+Change-Id: Idb87909a793ab7db65af46e8d1916746803246d4
+Signed-off-by: Yaroslav Zviezda <acroreiser@gmail.com>
+---
+ .../EapSimAkaMethodStateMachine.java          | 104 ++++++++++++++++--
+ 1 file changed, 97 insertions(+), 7 deletions(-)
+
+diff --git a/src/java/com/android/internal/net/eap/statemachine/EapSimAkaMethodStateMachine.java b/src/java/com/android/internal/net/eap/statemachine/EapSimAkaMethodStateMachine.java
+index 02fc0b3e..d8723d4f 100644
+--- a/src/java/com/android/internal/net/eap/statemachine/EapSimAkaMethodStateMachine.java
++++ b/src/java/com/android/internal/net/eap/statemachine/EapSimAkaMethodStateMachine.java
+@@ -255,21 +255,111 @@ public abstract class EapSimAkaMethodStateMachine extends EapMethodStateMachine
+         LOG.d(tag, "EMSK=" + LOG.pii(mEmsk));
+     }
+ 
++private String getUsimAid() {
++        try {
++            java.lang.reflect.Method method = mTelephonyManager.getClass().getMethod(
++                    "getAidForAppType", int.class);
++            String aid = (String) method.invoke(mTelephonyManager, TelephonyManager.APPTYPE_USIM);
++            if (aid != null && !aid.isEmpty()) {
++                LOG.d(this.getClass().getSimpleName(), "TelephonyManager.getAidForAppType returned AID: " + aid);
++                return aid;
++            }
++        } catch (Throwable ignored) {
++        }
++        LOG.w(this.getClass().getSimpleName(), "getAidForAppType failed, using a0000000871002 as fallback");
++        return "a0000000871002";
++    }
++
++    private static String bytesToHex(byte[] bytes) {
++        StringBuilder sb = new StringBuilder(bytes.length * 2);
++        for (byte b : bytes) {
++            sb.append(String.format("%02x", b & 0xFF));
++        }
++        return sb.toString();
++    }
++
++    private static byte[] hexToBytes(String hex) {
++        int len = hex.length();
++        byte[] data = new byte[len / 2];
++        for (int i = 0; i < len; i += 2) {
++            data[i / 2] = (byte) ((Character.digit(hex.charAt(i), 16) << 4)
++                    + Character.digit(hex.charAt(i + 1), 16));
++        }
++        return data;
++    }
++
+     @VisibleForTesting
+     byte[] processUiccAuthentication(String tag, int authType, byte[] formattedChallenge) throws
+             EapSimAkaAuthenticationFailureException {
+-        String base64Challenge = Base64.encodeToString(formattedChallenge, Base64.NO_WRAP);
+-        String base64Response =
+-                mTelephonyManager.getIccAuthentication(
+-                        mEapUiccConfig.getAppType(), authType, base64Challenge);
++        String payloadHex = bytesToHex(formattedChallenge);
++        String usimAid = getUsimAid();
++
++        android.telephony.IccOpenLogicalChannelResponse iccChannel =
++                mTelephonyManager.iccOpenLogicalChannel(usimAid);
++        if (iccChannel == null || iccChannel.getChannel() <= 0) {
++            String msg = "Failed to open logical channel to USIM (AID: " + usimAid + ")";
++            LOG.e(tag, msg);
++            throw new EapSimAkaAuthenticationFailureException(msg);
++        }
++
++        int channel = iccChannel.getChannel();
++        String apduResponseHex = null;
++        int p2 = (authType == TelephonyManager.AUTHTYPE_EAP_SIM) ? 0x80 : 0x81;
++
++        try {
++            apduResponseHex = mTelephonyManager.iccTransmitApduLogicalChannel(
++                    channel,
++                    0x00,                      // cla
++                    0x88,                      // ins (AUTHENTICATE)
++                    0x00,                      // p1
++                    p2,                        // p2 (3G Security Context = 0x81, 2G GSM = 0x80)
++                    formattedChallenge.length, // p3 (Lc = 34)
++                    payloadHex                 // data
++            );
++
++            if (apduResponseHex != null && apduResponseHex.length() >= 4) {
++                int sw1 = Integer.parseInt(apduResponseHex.substring(apduResponseHex.length() - 4, apduResponseHex.length() - 2), 16);
++                int sw2 = Integer.parseInt(apduResponseHex.substring(apduResponseHex.length() - 2), 16);
++
++                if (sw1 == 0x61) {
++                    apduResponseHex = mTelephonyManager.iccTransmitApduLogicalChannel(
++                            channel,
++                            0x00, // cla
++                            0xC0, // ins (GET RESPONSE)
++                            0x00, // p1
++                            0x00, // p2
++                            sw2,  // p3 (Le = sw2)
++                            ""    // data
++                    );
++                }
++            }
++        } finally {
++            mTelephonyManager.iccCloseLogicalChannel(channel);
++        }
++
++        if (apduResponseHex == null || apduResponseHex.length() < 4) {
++            String msg = "UICC APDU authentication returned empty or null response";
++            LOG.e(tag, msg);
++            throw new EapSimAkaAuthenticationFailureException(msg);
++        }
++
++        byte[] rawResponseBytes = hexToBytes(apduResponseHex);
++        if (rawResponseBytes.length < 2) {
++            String msg = "UICC APDU response is too short";
++            LOG.e(tag, msg);
++            throw new EapSimAkaAuthenticationFailureException(msg);
++        }
++
++        int sw1 = rawResponseBytes[rawResponseBytes.length - 2] & 0xFF;
++        int sw2 = rawResponseBytes[rawResponseBytes.length - 1] & 0xFF;
+ 
+-        if (base64Response == null) {
+-            String msg = "UICC authentication failed. Input: " + LOG.pii(formattedChallenge);
++        if (sw1 != 0x90 && sw1 != 0x61) {
++            String msg = String.format("UICC APDU failed with SIM SW status: 0x%02X 0x%02X", sw1, sw2);
+             LOG.e(tag, msg);
+             throw new EapSimAkaAuthenticationFailureException(msg);
+         }
+ 
+-        return Base64.decode(base64Response, Base64.DEFAULT);
++        return Arrays.copyOfRange(rawResponseBytes, 0, rawResponseBytes.length - 2);
+     }
+ 
+     @VisibleForTesting
+-- 
+2.47.3
+
