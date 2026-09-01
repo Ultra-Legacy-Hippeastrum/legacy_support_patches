@@ -1,0 +1,135 @@
+From b908c2268d05cfaa0ccf6e0d74a35554d0a15fc2 Mon Sep 17 00:00:00 2001
+From: Yaroslav Zviezda <acroreiser@gmail.com>
+Date: Tue, 1 Sep 2026 01:33:44 +0300
+Subject: [PATCH] SystemUI: restore roaming icon, make HD a separate icon
+
+Change-Id: I4cb4f2e32dee169f7351def0f859fedf8b8a46d9
+---
+ .../status_bar_mobile_signal_group_inner.xml  | 36 ++++++++++++++-----
+ .../mobile/ui/binder/MobileIconBinder.kt      | 25 ++++++++++---
+ 2 files changed, 48 insertions(+), 13 deletions(-)
+
+diff --git a/packages/SystemUI/res-keyguard/layout/status_bar_mobile_signal_group_inner.xml b/packages/SystemUI/res-keyguard/layout/status_bar_mobile_signal_group_inner.xml
+index 14e0b5bed493..3686ed35ddd1 100644
+--- a/packages/SystemUI/res-keyguard/layout/status_bar_mobile_signal_group_inner.xml
++++ b/packages/SystemUI/res-keyguard/layout/status_bar_mobile_signal_group_inner.xml
+@@ -28,6 +28,25 @@
+         android:gravity="center_vertical"
+         android:orientation="horizontal" >
+ 
++        <Space
++            android:id="@+id/mobile_hd_space"
++            android:layout_height="@dimen/status_bar_mobile_container_height"
++            android:layout_width="wrap_content"
++            android:layout_marginStart="2.5sp"
++            android:layout_marginEnd="1sp"
++            android:visibility="gone"
++            />
++        <ImageView
++            android:id="@+id/mobile_hd"
++            android:layout_width="wrap_content"
++            android:layout_height="@dimen/status_bar_mobile_type_size"
++            android:layout_gravity="center_vertical"
++            android:layout_marginEnd="5dp"
++            android:scaleType="fitCenter"
++            android:adjustViewBounds="true"
++            android:src="@drawable/ic_hd_calling"
++            android:visibility="gone" />
++
+         <FrameLayout
+             android:id="@+id/inout_container"
+             android:layout_height="@dimen/status_bar_mobile_inout_container_size"
+@@ -67,9 +86,9 @@
+                 />
+         </FrameLayout>
+         <Space
+-            android:id="@+id/mobile_hd_space"
++            android:id="@+id/mobile_roaming_space"
+             android:layout_height="match_parent"
+-            android:layout_width="2.5dp"
++            android:layout_width="@dimen/roaming_icon_start_padding"
+             android:visibility="gone"
+             />
+         <FrameLayout
+@@ -85,14 +104,13 @@
+                 />
+             <!-- TODO(b/314812750): this can be removed once the flag is rolled out -->
+             <ImageView
+-                android:id="@+id/mobile_hd"
+-                android:layout_width="12dp"
+-                android:layout_height="8dp"
+-                android:layout_marginTop="1dp"
+-                android:layout_gravity="start|top"
+-                android:src="@drawable/ic_hd_calling"
++                android:id="@+id/mobile_roaming"
++                android:layout_width="wrap_content"
++                android:layout_height="@dimen/status_bar_mobile_roam_size"
+                 android:adjustViewBounds="true"
+-                android:gravity="start|top"
++                android:layout_gravity="top|start"
++                android:src="@drawable/stat_sys_roaming"
++                android:contentDescription="@string/data_connection_roaming"
+                 android:visibility="gone" />
+         </FrameLayout>
+         <ImageView
+diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/pipeline/mobile/ui/binder/MobileIconBinder.kt b/packages/SystemUI/src/com/android/systemui/statusbar/pipeline/mobile/ui/binder/MobileIconBinder.kt
+index d834ddf58058..565d863b3dd6 100644
+--- a/packages/SystemUI/src/com/android/systemui/statusbar/pipeline/mobile/ui/binder/MobileIconBinder.kt
++++ b/packages/SystemUI/src/com/android/systemui/statusbar/pipeline/mobile/ui/binder/MobileIconBinder.kt
+@@ -70,6 +70,9 @@ object MobileIconBinder {
+         val networkTypeContainer = view.requireViewById<FrameLayout>(R.id.mobile_type_container)
+         val iconView = view.requireViewById<ImageView>(R.id.mobile_signal)
+         val mobileDrawable = SignalDrawable(view.context)
++        val roamingView = view.requireViewById<ImageView>(R.id.mobile_roaming)
++        val roamingSpace = view.requireViewById<Space>(R.id.mobile_roaming_space)
++        val endSideRoamingView = view.requireViewById<ImageView>(R.id.mobile_roaming_updated)
+         val mobileHdView = view.requireViewById<ImageView>(R.id.mobile_hd)
+         val mobileHdSpace = view.requireViewById<Space>(R.id.mobile_hd_space)
+         val dotView = view.requireViewById<StatusBarIconView>(R.id.status_bar_dot)
+@@ -185,6 +188,14 @@ object MobileIconBinder {
+                         }
+                     }
+ 
++                    // Set the mobile HD indicator (VoLTE/VoNR)
++                    launch {
++                        viewModel.showHd.distinctUntilChanged().collect { isHd ->
++                            mobileHdView.isVisible = isHd
++                            mobileHdSpace.isVisible = isHd
++                        }
++                    }
++
+                     // Set the network type icon
+                     launch {
+                         viewModel.networkTypeIcon.distinctUntilChanged().collect { dataTypeId ->
+@@ -222,11 +233,15 @@ object MobileIconBinder {
+                         }
+                     }
+ 
+-                    // Set the mobile HD indicator (VoLTE/VoNR)
++                    // Set the roaming indicator
+                     launch {
+-                        viewModel.showHd.distinctUntilChanged().collect { isHd ->
+-                            mobileHdView.isVisible = isHd
+-                            mobileHdSpace.isVisible = isHd
++                        viewModel.roaming.distinctUntilChanged().collect { isRoaming ->
++                            if (NewStatusBarIcons.isEnabled) {
++                                endSideRoamingView.isVisible = isRoaming
++                            } else {
++                                roamingView.isVisible = isRoaming
++                                roamingSpace.isVisible = isRoaming
++                            }
+                         }
+                     }
+ 
+@@ -276,6 +291,8 @@ object MobileIconBinder {
+                                 networkTypeView.imageTintList = tint
+                             }
+ 
++                            roamingView.imageTintList = tint
++                            endSideRoamingView.imageTintList = tint
+                             mobileHdView.imageTintList = tint
+                             activityIn.imageTintList = tint
+                             activityOut.imageTintList = tint
+-- 
+2.47.3
+
